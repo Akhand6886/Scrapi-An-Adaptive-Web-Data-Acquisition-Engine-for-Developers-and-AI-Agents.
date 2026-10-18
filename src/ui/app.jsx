@@ -78,6 +78,7 @@ function App() {
   const [topicConcurrency, setTopicConcurrency] = useState(2);
   const [topicDelay, setTopicDelay] = useState(1000);
   const [topicSitemap, setTopicSitemap] = useState(true);
+  const [topicVelocity, setTopicVelocity] = useState({ pagesPerSec: 0, articlesPerSec: 0, elapsedSec: 0 });
 
   // Active Tab ('iframe' | 'markdown' | 'query' | 'adaptive')
   const [activeTab, setActiveTab] = useState('iframe');
@@ -259,6 +260,9 @@ function App() {
         try {
           const data = await safeFetchJson('/api/topic/status');
           setTopicStats(data.stats || { visited: 0, queued: 0, succeeded: 0, failed: 0, skippedExisting: 0 });
+          if (data.velocity) {
+            setTopicVelocity(data.velocity);
+          }
           setTopicDateCoverage(data.dateCoverage || { earliestDate: null, latestDate: null, byYear: {} });
           setTopicLogs(data.logs || []);
           setTopicPages(data.pages || []);
@@ -1197,6 +1201,16 @@ function App() {
                       <div class="text-xs font-bold text-yellow-300">{topicStats.skippedExisting || 0}</div>
                     </div>
                   </div>
+
+                  {topicVelocity && (topicVelocity.articlesPerSec > 0 || topicVelocity.pagesPerSec > 0) && (
+                    <div class="flex items-center justify-between px-2.5 py-1.5 bg-emerald-950/40 border border-emerald-500/20 rounded-lg text-[10px]">
+                      <span class="text-emerald-400 font-medium flex items-center gap-1.5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Speed: {topicVelocity.articlesPerSec} art/s ({topicVelocity.pagesPerSec} p/s)
+                      </span>
+                      <span class="text-slate-400 font-mono">{topicVelocity.elapsedSec}s elapsed</span>
+                    </div>
+                  )}
 
                   {/* Real-time pages stream */}
                   {topicPages.length > 0 && (

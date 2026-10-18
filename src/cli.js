@@ -495,20 +495,39 @@ program
   .option('--topic <name>', 'Topic or category name to filter and crawl exhaustively')
   .option('--exhaustive', 'Exhaustive crawl from earliest available content to current date', false)
   .option('--sitemap', 'Discover historical sitemaps', false)
+  .option('--no-probe-candidates', 'Disable speculative candidate URL probing', false)
   .action(async (url, options) => {
     await initStorage(undefined, options.output);
 
     // If --topic is specified, redirect to TopicCrawler with dual-frontier architecture
     if (options.topic) {
       console.log(chalk.bold.cyan(`\n🕷️ Starting topic-aware crawl for [${options.topic}] on ${url}...`));
+      const abortController = new AbortController();
+      let sigintCount = 0;
+      const sigintHandler = () => {
+        sigintCount++;
+        if (sigintCount === 1) {
+          console.log(chalk.yellow(`\n⚠️  Graceful interrupt: saving checkpoint and waiting for workers to settle... (Ctrl+C again to force exit)`));
+          abortController.abort();
+        } else {
+          console.log(chalk.red(`\n✖ Force exit triggered.`));
+          process.exit(130);
+        }
+      };
+      process.on('SIGINT', sigintHandler);
+
       try {
         const stats = await runTopicCrawl(url, options.topic, {
           ...options,
+          signal: abortController.signal,
+          probeCandidates: options.probeCandidates !== false,
           exhaustive: options.exhaustive,
           category: options.category || options.topic
         }, (evt) => {
           if (evt.type === 'log') {
             console.log(chalk.gray(evt.message));
+          } else if (evt.type === 'progress' && evt.velocity) {
+            process.stdout.write(chalk.gray(`\r   [Velocity: ${evt.velocity.articlesPerSec} art/s | ${evt.velocity.pagesPerSec} p/s | ${evt.velocity.elapsedSec}s elapsed]   `));
           }
         });
 
@@ -517,6 +536,12 @@ program
         console.log(chalk.green(`   Successful Scrapes: ${stats.succeeded}`));
         console.log(chalk.yellow(`   Skipped Existing:   ${stats.skippedExisting}`));
         console.log(chalk.red(`   Failed/Error Pages: ${stats.failed}`));
+        if (stats.throughput) {
+          console.log(chalk.cyan(`   Throughput:         ${stats.throughput.articlesPerSec} articles/s (${stats.throughput.pagesPerSec} pages/s)`));
+        }
+        if (stats.durationMs) {
+          console.log(chalk.cyan(`   Elapsed Time:       ${(stats.durationMs / 1000).toFixed(1)}s`));
+        }
         if (stats.dateCoverage && stats.dateCoverage.earliestDate) {
           console.log(chalk.magenta(`   Dynamic Date Range: ${stats.dateCoverage.earliestDate} ➔ ${stats.dateCoverage.latestDate}`));
         }
@@ -524,6 +549,7 @@ program
         console.error(chalk.red(`Topic crawl failed: ${err.message}`));
         process.exit(1);
       } finally {
+        process.removeListener('SIGINT', sigintHandler);
         await globalFetcherPool.close();
       }
       return;
@@ -622,6 +648,7 @@ program
   .option('-d, --depth <number>', 'Maximum depth level', 'Infinity')
   .option('--delay <ms>', 'Polite rate-limiting delay between requests in milliseconds', '1000')
   .option('--no-sitemap', 'Disable historical XML sitemap discovery', false)
+  .option('--no-probe-candidates', 'Disable speculative candidate URL probing', false)
   .option('--images', 'Include image alt text in output', false)
   .option('--download-media', 'Download images to local media directory', false)
   .option('--no-meta', 'Skip YAML frontmatter block', false)
@@ -657,8 +684,24 @@ program
     }
 
     const hostName = new URL(url).hostname;
+    const abortController = new AbortController();
+    let sigintCount = 0;
+    const sigintHandler = () => {
+      sigintCount++;
+      if (sigintCount === 1) {
+        console.log(chalk.yellow(`\n⚠️  Graceful interrupt: saving checkpoint and waiting for workers to settle... (Ctrl+C again to force exit)`));
+        abortController.abort();
+      } else {
+        console.log(chalk.red(`\n✖ Force exit triggered.`));
+        process.exit(130);
+      }
+    };
+    process.on('SIGINT', sigintHandler);
+
     const topicOptions = {
       ...options,
+      signal: abortController.signal,
+      probeCandidates: options.probeCandidates !== false,
       exhaustive: true,
       maxPages: options.maxPages === 'Infinity' ? Infinity : parseInt(options.maxPages, 10),
       depth: options.depth === 'Infinity' ? Infinity : parseInt(options.depth, 10),
@@ -679,6 +722,8 @@ program
       const stats = await runTopicCrawl(url, targetTopic, topicOptions, (evt) => {
         if (evt.type === 'log') {
           console.log(chalk.gray(evt.message));
+        } else if (evt.type === 'progress' && evt.velocity) {
+          process.stdout.write(chalk.gray(`\r   [Velocity: ${evt.velocity.articlesPerSec} art/s | ${evt.velocity.pagesPerSec} p/s | ${evt.velocity.elapsedSec}s elapsed]   `));
         }
       });
 
@@ -688,6 +733,12 @@ program
       console.log(chalk.green(`   Articles Scraped:    ${stats.succeeded}`));
       console.log(chalk.yellow(`   Skipped (Existing):  ${stats.skippedExisting}`));
       console.log(chalk.red(`   Failed/Inaccessible: ${stats.failed}`));
+      if (stats.throughput) {
+        console.log(chalk.cyan(`   Throughput:          ${stats.throughput.articlesPerSec} articles/s (${stats.throughput.pagesPerSec} pages/s)`));
+      }
+      if (stats.durationMs) {
+        console.log(chalk.cyan(`   Elapsed Time:        ${(stats.durationMs / 1000).toFixed(1)}s`));
+      }
 
       if (stats.dateCoverage && stats.dateCoverage.earliestDate) {
         console.log(chalk.magenta.bold(`\n📅 Dynamic Date Coverage Report:`));
@@ -715,6 +766,7 @@ program
       console.error(chalk.red(`\n✖ Exhaustive crawl encountered fatal error: ${err.message}`));
       process.exit(1);
     } finally {
+      process.removeListener('SIGINT', sigintHandler);
       await globalFetcherPool.close();
     }
   });

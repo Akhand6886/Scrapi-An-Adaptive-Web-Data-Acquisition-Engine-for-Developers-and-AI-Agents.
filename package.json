@@ -4,6 +4,9 @@
   "description": "An adaptive, ultra-fast web scraping and crawling framework",
   "type": "module",
   "main": "src/cli.js",
+  "bin": {
+    "scrapi": "./src/cli.js"
+  },
   "scripts": {
     "start": "node src/cli.js",
     "test": "node test.js",

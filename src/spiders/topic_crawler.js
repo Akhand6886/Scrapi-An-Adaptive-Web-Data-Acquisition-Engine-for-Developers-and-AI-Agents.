@@ -57,7 +57,7 @@ export class TopicCrawler {
 
     this.fetcherPool = options.fetcherPool || globalFetcherPool;
     this.engine = null;
-    this.aborted = false;
+    this.aborted = !!this.options.aborted;
 
     // Attach external AbortSignal if supplied
     if (this.options.signal) {
@@ -236,6 +236,23 @@ export class TopicCrawler {
   async crawl(websiteUrl, topicName, onProgress = () => {}) {
     const startTime = Date.now();
     const normalizedUrl = TopicCrawler.normalizeUrl(websiteUrl);
+
+    if (this.aborted || this.options.aborted) {
+      return {
+        success: false,
+        topic: topicName,
+        seedUrl: normalizedUrl,
+        entrypoint: normalizedUrl,
+        aborted: true,
+        visited: 0,
+        succeeded: 0,
+        failed: 0,
+        skippedExisting: 0,
+        durationMs: 0,
+        throughput: { pagesPerSec: 0, articlesPerSec: 0 }
+      };
+    }
+
     const host = new URL(normalizedUrl).hostname;
     const sanitizedTopic = (topicName || 'all').toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const jobId = this.options.jobId || `${host}-${sanitizedTopic}-topic-crawl`;
@@ -248,6 +265,22 @@ export class TopicCrawler {
 
     const { entrypoint, strategy, verified } = await this.resolveTopicEntrypointDetails(normalizedUrl, topicName);
 
+    if (this.aborted || this.options.aborted) {
+      return {
+        success: false,
+        topic: topicName,
+        seedUrl: normalizedUrl,
+        entrypoint: entrypoint || normalizedUrl,
+        aborted: true,
+        visited: 0,
+        succeeded: 0,
+        failed: 0,
+        skippedExisting: 0,
+        durationMs: Date.now() - startTime,
+        throughput: { pagesPerSec: 0, articlesPerSec: 0 }
+      };
+    }
+
     onProgress({
       type: 'entrypoint_resolved',
       message: `🎯 Target Entrypoint resolved to: ${entrypoint} (Strategy: ${strategy})`,
@@ -256,6 +289,7 @@ export class TopicCrawler {
 
     this.engine = new CrawlEngine({
       ...this.options,
+      aborted: this.aborted || this.options.aborted,
       fetcherPool: this.fetcherPool,
       topic: topicName,
       category: topicName,
@@ -323,5 +357,8 @@ export class TopicCrawler {
  */
 export async function runTopicCrawl(websiteUrl, topicName, options = {}, onProgress = () => {}) {
   const crawler = new TopicCrawler(options);
+  if (options && typeof options === 'object') {
+    options._crawler = crawler;
+  }
   return crawler.crawl(websiteUrl, topicName, onProgress);
 }

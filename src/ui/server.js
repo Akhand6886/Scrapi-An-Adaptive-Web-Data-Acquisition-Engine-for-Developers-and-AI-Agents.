@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
 import { 
   initStorage, 
+  closeStorage,
   getAllProfiles, 
   saveProfile, 
   getAllScrapes, 
@@ -50,6 +51,7 @@ let activeSpider = {
   pages: [],
   promise: null,
   aborted: false,
+  abortController: null,
   options: null
 };
 
@@ -65,6 +67,12 @@ let activeTopicCrawl = {
     failed: 0,
     skippedExisting: 0
   },
+  velocity: {
+    pagesPerSec: 0,
+    articlesPerSec: 0,
+    elapsedSec: 0
+  },
+  throughput: null,
   dateCoverage: {
     earliestDate: null,
     latestDate: null,
@@ -74,6 +82,7 @@ let activeTopicCrawl = {
   pages: [],
   promise: null,
   aborted: false,
+  abortController: null,
   options: null
 };
 
@@ -364,6 +373,7 @@ app.post('/api/spider', async (req, res) => {
   const hostName = new URL(url).hostname;
   const currentJobId = jobId || `${hostName}-spider`;
 
+  activeSpider.abortController = new AbortController();
   const spiderOptions = {
     depth: depth !== undefined && depth !== null ? (depth === 'Infinity' ? Infinity : parseInt(depth, 10)) : Infinity,
     maxPages: maxPages !== undefined ? parseInt(maxPages, 10) : 100,
@@ -374,7 +384,8 @@ app.post('/api/spider', async (req, res) => {
     fetcher: fetcher || 'static',
     jobId: currentJobId,
     resume: !!resume,
-    aborted: false
+    aborted: false,
+    signal: activeSpider.abortController.signal
   };
 
   activeSpider.running = true;
@@ -434,6 +445,9 @@ app.post('/api/spider/pause', (req, res) => {
   if (!activeSpider.running) {
     return res.status(400).json({ error: 'No spider job is running.' });
   }
+  if (activeSpider.abortController) {
+    activeSpider.abortController.abort();
+  }
   if (activeSpider.options) {
     activeSpider.options.aborted = true;
   }
@@ -446,6 +460,9 @@ app.post('/api/spider/pause', (req, res) => {
 app.post('/api/spider/cancel', (req, res) => {
   if (!activeSpider.running) {
     return res.status(400).json({ error: 'No spider job is running.' });
+  }
+  if (activeSpider.abortController) {
+    activeSpider.abortController.abort();
   }
   if (activeSpider.options) {
     activeSpider.options.aborted = true;
@@ -487,6 +504,7 @@ app.post('/api/topic/crawl', async (req, res) => {
   const hostName = new URL(url).hostname;
   const currentJobId = `${hostName}-${topic.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-topic`;
 
+  activeTopicCrawl.abortController = new AbortController();
   const topicOptions = {
     exhaustive: true,
     concurrency: concurrency !== undefined ? parseInt(concurrency, 10) : 2,
@@ -495,7 +513,8 @@ app.post('/api/topic/crawl', async (req, res) => {
     fetcher: fetcher || 'auto',
     jobId: currentJobId,
     resume: !!resume,
-    aborted: false
+    aborted: false,
+    signal: activeTopicCrawl.abortController.signal
   };
 
   activeTopicCrawl.running = true;
@@ -504,6 +523,8 @@ app.post('/api/topic/crawl', async (req, res) => {
   activeTopicCrawl.aborted = false;
   activeTopicCrawl.options = topicOptions;
   activeTopicCrawl.stats = { visited: 0, queued: 0, succeeded: 0, failed: 0, skippedExisting: 0 };
+  activeTopicCrawl.velocity = { pagesPerSec: 0, articlesPerSec: 0, elapsedSec: 0 };
+  activeTopicCrawl.throughput = null;
   activeTopicCrawl.dateCoverage = { earliestDate: null, latestDate: null, byYear: {} };
   activeTopicCrawl.pages = [];
   activeTopicCrawl.logs = [
@@ -528,10 +549,13 @@ app.post('/api/topic/crawl', async (req, res) => {
       }
     } else if (evt.type === 'progress') {
       activeTopicCrawl.stats = evt.stats;
-      if (evt.stats.earliestDate) {
+      if (evt.velocity) {
+        activeTopicCrawl.velocity = evt.velocity;
+      }
+      if (evt.stats && evt.stats.earliestDate) {
         activeTopicCrawl.dateCoverage.earliestDate = evt.stats.earliestDate;
       }
-      if (evt.stats.latestDate) {
+      if (evt.stats && evt.stats.latestDate) {
         activeTopicCrawl.dateCoverage.latestDate = evt.stats.latestDate;
       }
     }
@@ -540,6 +564,9 @@ app.post('/api/topic/crawl', async (req, res) => {
     activeTopicCrawl.stats.succeeded = results.succeeded;
     activeTopicCrawl.stats.failed = results.failed;
     activeTopicCrawl.stats.skippedExisting = results.skippedExisting;
+    if (results.throughput) {
+      activeTopicCrawl.throughput = results.throughput;
+    }
     if (results.dateCoverage) {
       activeTopicCrawl.dateCoverage = results.dateCoverage;
     }
@@ -561,6 +588,8 @@ app.get('/api/topic/status', (req, res) => {
     seedUrl: activeTopicCrawl.seedUrl,
     topic: activeTopicCrawl.topic,
     stats: activeTopicCrawl.stats,
+    velocity: activeTopicCrawl.velocity || { pagesPerSec: 0, articlesPerSec: 0, elapsedSec: 0 },
+    throughput: activeTopicCrawl.throughput || null,
     dateCoverage: activeTopicCrawl.dateCoverage,
     logs: activeTopicCrawl.logs,
     pages: activeTopicCrawl.pages,
@@ -574,6 +603,9 @@ app.post('/api/topic/pause', (req, res) => {
   if (!activeTopicCrawl.running) {
     return res.status(400).json({ error: 'No topic crawl is running.' });
   }
+  if (activeTopicCrawl.abortController) {
+    activeTopicCrawl.abortController.abort();
+  }
   if (activeTopicCrawl.options) {
     activeTopicCrawl.options.aborted = true;
   }
@@ -586,6 +618,9 @@ app.post('/api/topic/pause', (req, res) => {
 app.post('/api/topic/cancel', (req, res) => {
   if (!activeTopicCrawl.running) {
     return res.status(400).json({ error: 'No topic crawl is running.' });
+  }
+  if (activeTopicCrawl.abortController) {
+    activeTopicCrawl.abortController.abort();
   }
   if (activeTopicCrawl.options) {
     activeTopicCrawl.options.aborted = true;
@@ -801,10 +836,39 @@ app.get('/api/mcp/info', (req, res) => {
 app.post('/api/kill', (req, res) => {
   res.json({ success: true, message: 'Server is shutting down...' });
   console.log('🛑 Shutting down server as requested from Web UI...');
-  setTimeout(() => {
+  if (activeTopicCrawl.abortController) {
+    activeTopicCrawl.abortController.abort();
+  }
+  if (activeSpider.abortController) {
+    activeSpider.abortController.abort();
+  }
+  setTimeout(async () => {
+    try {
+      await globalFetcherPool.close();
+      closeStorage();
+    } catch (_) {}
     process.exit(0);
-  }, 800);
+  }, 500);
 });
+
+// Graceful process termination handlers
+const gracefulShutdown = async (signal) => {
+  console.log(`\n🛑 Received ${signal}. Shutting down Scrapi Server cleanly...`);
+  if (activeTopicCrawl.abortController) {
+    activeTopicCrawl.abortController.abort();
+  }
+  if (activeSpider.abortController) {
+    activeSpider.abortController.abort();
+  }
+  try {
+    await globalFetcherPool.close();
+    closeStorage();
+  } catch (_) {}
+  process.exit(0);
+};
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 // Serve frontend files statically
 app.use(express.static(__dirname));
