@@ -349,6 +349,28 @@ export function getAllScrapes(categoryFilter = null) {
 }
 
 /**
+ * Retrieves all successful scrape records for a given domain/hostname.
+ * @param {string} domain 
+ * @returns {Array}
+ */
+export function getScrapesByDomain(domain) {
+  if (!db || !domain) return [];
+  try {
+    const cleanDomain = String(domain).replace(/^https?:\/\//i, '').split('/')[0].trim();
+    if (!cleanDomain) return [];
+    const stmt = db.prepare(`
+      SELECT * FROM scrapes 
+      WHERE (url LIKE ? OR filename LIKE ?) AND status = 'success' 
+      ORDER BY scraped_at DESC
+    `);
+    return stmt.all(`%${cleanDomain}%`, `%${cleanDomain}%`);
+  } catch (err) {
+    console.error('[Storage Error] getScrapesByDomain failed:', err.message);
+    return [];
+  }
+}
+
+/**
  * Retrieves a scrape by its ID.
  * @param {number} id 
  * @returns {object|null}
