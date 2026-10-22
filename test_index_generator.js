@@ -1,3 +1,4 @@
+import './src/polyfill.js';
 import fs from 'fs/promises';
 import path from 'path';
 import assert from 'assert';
@@ -81,7 +82,7 @@ async function runTests() {
     
     // Assert Header & Metadata
     assert.ok(indexContent.includes('# 📑 Exhaustive Topic Archive: [Documentation]'), 'Includes topic title');
-    assert.ok(indexContent.includes('2024-03-15 ➔ 2026-10-14'), 'Displays correct date span');
+    assert.ok(indexContent.includes('`2024-03-15` ➔ `2026-10-14`'), 'Displays correct date span');
     
     // Assert Directory & Path Hierarchy Section
     assert.ok(indexContent.includes('## 📁 Directory & Path Hierarchy'), 'Includes Directory Hierarchy section');
@@ -142,6 +143,45 @@ async function runTests() {
     assert.ok(diskIndex.includes('First Great Article'), 'Cataloged article title correctly');
     assert.ok(diskIndex.includes('./articles/article-1.md'), 'Relative path resolved correctly');
     console.log('  ✓ IndexGenerator.fromDirectory successfully scanned and cataloged disk directory.');
+
+    // 3. Testing Automated End-to-End Crawl Index Generation
+    console.log('\n3. Testing End-to-End Crawl Automated Index Generation...');
+    const http = await import('http');
+    const mockServer = http.createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      if (req.url === '/') {
+        res.end(`<html><head><title>My Site Root</title></head><body><h1>My Site</h1><p>Home content</p><a href="/page1">Page 1</a></body></html>`);
+      } else if (req.url === '/page1') {
+        res.end(`<html><head><title>Subpage One</title></head><body><h1>Page 1</h1><p>Page 1 content here</p></body></html>`);
+      } else {
+        res.writeHead(404);
+        res.end('Not found');
+      }
+    });
+
+    await new Promise(resolve => mockServer.listen(0, '127.0.0.1', resolve));
+    const port = mockServer.address().port;
+    const seedUrl = `http://127.0.0.1:${port}/`;
+
+    const { runSpider } = await import('./src/spiders/index.js');
+    const crawlStats = await runSpider(seedUrl, {
+      output: testOutputDir,
+      maxPages: 2,
+      depth: 1,
+      delay: 0,
+      fetcher: 'static',
+      noDb: false
+    });
+
+    mockServer.close();
+
+    assert.ok(crawlStats.indexPath, 'Crawl returned indexPath');
+    assert.ok(crawlStats.manifestPath, 'Crawl returned manifestPath');
+    const crawlIndexContent = await fs.readFile(crawlStats.indexPath, 'utf-8');
+    assert.ok(crawlIndexContent.includes('Directory & Path Hierarchy'), 'Contains hierarchy in generated index');
+    assert.ok(crawlIndexContent.includes('My Site Root'), 'Indexed root title');
+    assert.ok(crawlIndexContent.includes('Subpage One'), 'Indexed subpage title');
+    console.log('  ✓ Automated end-to-end crawl index generation verified successfully.');
 
     console.log('\n🏆 ========================================================');
     console.log('🏆 ALL TABLE OF CONTENTS & INDEX TESTS PASSED SUCCESSFULLY!');

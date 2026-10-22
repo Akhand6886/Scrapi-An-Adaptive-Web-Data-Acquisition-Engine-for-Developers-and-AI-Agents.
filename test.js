@@ -11,7 +11,8 @@ const testFiles = [
   'test_optimizations.js',
   'test_category_crawl.js',
   'test_topic_crawl.js',
-  'test_reliability_audit.js'
+  'test_reliability_audit.js',
+  'test_index_generator.js'
 ];
 
 async function runAll() {
