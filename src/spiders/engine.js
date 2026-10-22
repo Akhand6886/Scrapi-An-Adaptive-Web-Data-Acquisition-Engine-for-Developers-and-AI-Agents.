@@ -13,6 +13,7 @@ import { prioritizeUrl } from '../trees/crawl_prioritizer.js';
 import { PaginationEngine } from './pagination.js';
 import { SitemapEngine } from './sitemap.js';
 import { TopicMatcher } from './topic_matcher.js';
+import { IndexGenerator } from './index_generator.js';
 
 /**
  * CrawlEngine coordinates asynchronous crawling, multi-tier adaptive fetching,
@@ -75,6 +76,8 @@ export class CrawlEngine {
       byYear: {},
       totalWithDates: 0
     };
+
+    this.scrapedPages = [];
   }
 
   cleanUrl(urlStr, baseUrl = null) {
@@ -552,6 +555,18 @@ export class CrawlEngine {
             }
 
             this.succeeded++;
+            this.scrapedPages.push({
+              url: targetUrl,
+              title: result.metadata.title || rawBaseName,
+              filename: finalFilename,
+              date: result.metadata.date || null,
+              author: result.metadata.author || null,
+              category: category || null,
+              wordCount: result.metadata.word_count || 0,
+              description: result.metadata.description || null,
+              depth: item.depth || 0,
+              scrapedAt: new Date().toISOString()
+            });
             const dateBadge = result.metadata.date ? ` [${result.metadata.date}]` : '';
             logMessage(`✓ Success:${dateBadge} Scraped ${result.metadata.title || targetUrl} ➔ ${finalFilename}`);
 
@@ -654,13 +669,44 @@ export class CrawlEngine {
       );
     }
 
+    // Generate Master Table of Contents (INDEX.md) and machine-readable manifest.json
+    let indexPath = null;
+    let manifestPath = null;
+    if (this.options.index !== false && (this.succeeded > 0 || this.scrapedPages.length > 0)) {
+      try {
+        const urlObj = new URL(seedUrl);
+        const host = urlObj.hostname.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const targetDir = path.join(this.outputDir, host);
+        const indexResult = await IndexGenerator.generateIndex(this.scrapedPages, {
+          targetDir,
+          outputBaseDir: this.outputDir,
+          domain: urlObj.hostname,
+          seedUrl,
+          topic: this.topic,
+          dateCoverage: this.dateCoverage,
+          generateJson: this.options.manifest !== false,
+          mergeExisting: this.options.mergeExisting !== false
+        });
+        indexPath = indexResult.indexPath;
+        manifestPath = indexResult.manifestPath;
+        if (indexPath) {
+          logMessage(`📑 Generated Table of Contents index ➔ ${path.relative(this.outputDir, indexPath)} (${indexResult.totalPages} pages indexed)`);
+        }
+      } catch (err) {
+        logMessage(`⚠️ Index generation notice: ${err.message}`);
+      }
+    }
+
     return { 
       visited: this.visited.size, 
       succeeded: this.succeeded, 
       failed: this.failed,
       skippedExisting: this.skippedExisting,
       dateCoverage: this.dateCoverage,
-      failedUrls: this.failedUrls
+      failedUrls: this.failedUrls,
+      indexPath,
+      manifestPath,
+      scrapedPages: this.scrapedPages
     };
   }
 }
