@@ -331,6 +331,8 @@ export class TopicCrawler {
       skippedExisting: results.skippedExisting,
       dateCoverage: results.dateCoverage,
       failedUrls: results.failedUrls,
+      indexPath: results.indexPath || null,
+      manifestPath: results.manifestPath || null,
       throughput: {
         pagesPerSec,
         articlesPerSec
