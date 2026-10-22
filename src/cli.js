@@ -542,6 +542,9 @@ program
         if (stats.durationMs) {
           console.log(chalk.cyan(`   Elapsed Time:       ${(stats.durationMs / 1000).toFixed(1)}s`));
         }
+        if (stats.indexPath) {
+          console.log(chalk.magenta.bold(`   Table of Contents:  ${chalk.white.bold(stats.indexPath)}`));
+        }
         if (stats.dateCoverage && stats.dateCoverage.earliestDate) {
           console.log(chalk.magenta(`   Dynamic Date Range: ${stats.dateCoverage.earliestDate} ➔ ${stats.dateCoverage.latestDate}`));
         }
@@ -739,6 +742,12 @@ program
       if (stats.durationMs) {
         console.log(chalk.cyan(`   Elapsed Time:        ${(stats.durationMs / 1000).toFixed(1)}s`));
       }
+      if (stats.indexPath) {
+        console.log(chalk.magenta.bold(`   Table of Contents:   ${chalk.white.bold(stats.indexPath)}`));
+      }
+      if (stats.manifestPath) {
+        console.log(chalk.gray(`   JSON Manifest:       ${stats.manifestPath}`));
+      }
 
       if (stats.dateCoverage && stats.dateCoverage.earliestDate) {
         console.log(chalk.magenta.bold(`\n📅 Dynamic Date Coverage Report:`));
@@ -817,11 +826,82 @@ program
       console.log(chalk.bold.green(`\n✓ Crawl completed successfully!`));
       console.log(chalk.cyan(`   Total Visited Pages:  ${stats.visited}`));
       console.log(chalk.green(`   Successful Scrapes:   ${stats.succeeded}`));
-      console.log(chalk.red(`   Failed/Error Pages:   ${stats.failed}\n`));
+      console.log(chalk.red(`   Failed/Error Pages:   ${stats.failed}`));
+      if (stats.indexPath) {
+        console.log(chalk.magenta.bold(`   Table of Contents:    ${chalk.white.bold(stats.indexPath)}`));
+      }
+      if (stats.manifestPath) {
+        console.log(chalk.gray(`   JSON Manifest:        ${stats.manifestPath}`));
+      }
+      console.log('');
     } catch (err) {
       handleError(err, spinner);
     } finally {
       await globalFetcherPool.close();
+    }
+  });
+
+// Index command: Generate or regenerate Master Table of Contents (INDEX.md) and manifest.json
+program
+  .command('index [target]')
+  .description('Generate or regenerate a Master Table of Contents (INDEX.md) and manifest.json for a domain or folder')
+  .option('-o, --output <dir>', 'Base directory containing scrapes', './output')
+  .option('--domain <name>', 'Domain name filter (e.g. example.com)')
+  .action(async (target, options) => {
+    await initStorage(undefined, options.output);
+    const spinner = ora('Generating Master Table of Contents (INDEX.md)...').start();
+    try {
+      let result;
+      let targetPath = target ? path.resolve(target) : null;
+      let isDir = false;
+      if (targetPath) {
+        try {
+          const stat = await fs.stat(targetPath);
+          isDir = stat.isDirectory();
+        } catch (_) {}
+      }
+
+      const { IndexGenerator } = await import('./spiders/index_generator.js');
+
+      if (isDir) {
+        spinner.text = `Cataloging directory ${chalk.cyan(targetPath)}...`;
+        result = await IndexGenerator.fromDirectory(targetPath, {
+          domain: options.domain || path.basename(targetPath)
+        });
+      } else {
+        const domain = options.domain || target;
+        if (!domain) {
+          spinner.fail(chalk.red('Please specify a target domain or directory (e.g. scrapi index example.com or scrapi index ./output/example.com)'));
+          return;
+        }
+        spinner.text = `Querying past scrapes for ${chalk.cyan(domain)}...`;
+        const { getScrapesByDomain } = await import('./storage.js');
+        const scrapes = getScrapesByDomain(domain);
+        if (!scrapes || scrapes.length === 0) {
+          spinner.fail(chalk.yellow(`No scrapes found in database for domain "${domain}". Try pointing to a directory: scrapi index ./output/${domain}`));
+          return;
+        }
+
+        const cleanDomain = domain.replace(/^https?:\/\//i, '').split('/')[0].replace(/[^a-zA-Z0-9.-]/g, '_');
+        const targetDir = path.join(options.output, cleanDomain);
+        result = await IndexGenerator.generateIndex([], {
+          targetDir,
+          outputBaseDir: options.output,
+          domain: cleanDomain,
+          mergeExisting: true
+        });
+      }
+
+      spinner.succeed(chalk.green(`Table of Contents generated successfully!`));
+      console.log(chalk.cyan(`   Indexed Pages:      ${result.totalPages}`));
+      console.log(chalk.cyan(`   Total Word Count:   ~${(result.totalWords || 0).toLocaleString()} words`));
+      console.log(chalk.magenta.bold(`   Table of Contents:  ${chalk.white.bold(result.indexPath)}`));
+      if (result.manifestPath) {
+        console.log(chalk.gray(`   JSON Manifest:      ${result.manifestPath}`));
+      }
+      console.log('');
+    } catch (err) {
+      spinner.fail(chalk.red(`Failed to generate index: ${err.message}`));
     }
   });
 
