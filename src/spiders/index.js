@@ -4,6 +4,7 @@ export { TopicCrawler, runTopicCrawl } from './topic_crawler.js';
 export { PaginationEngine } from './pagination.js';
 export { SitemapEngine } from './sitemap.js';
 export { TopicMatcher } from './topic_matcher.js';
+export { IndexGenerator } from './index_generator.js';
 
 /**
  * High-level helper to run spider.
