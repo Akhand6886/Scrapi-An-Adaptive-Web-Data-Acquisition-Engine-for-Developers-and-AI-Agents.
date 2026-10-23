@@ -139,6 +139,10 @@ function App() {
   const [indexRunning, setIndexRunning] = useState(false);
   const [indexResult, setIndexResult] = useState(null);
 
+  // In-Card Preview Toggles for Studio
+  const [showMergePreview, setShowMergePreview] = useState(false);
+  const [showIndexPreview, setShowIndexPreview] = useState(false);
+
   // Export Menu State
   const [showExportMenu, setShowExportMenu] = useState(false);
 
@@ -147,6 +151,14 @@ function App() {
   const [history, setHistory] = useState([]);
 
   const iframeRef = useRef(null);
+
+  // Domain parsing helpers to handle both string and {domain, count} object representations
+  const getDomainName = (d) => (typeof d === 'string' ? d : (d?.domain || ''));
+  const getDomainLabel = (d) => {
+    if (!d) return '';
+    if (typeof d === 'string') return d;
+    return d.count ? `${d.domain} (${d.count} pages)` : (d.domain || '');
+  };
 
   const showToast = (text, type = 'info') => {
     setStatusMsg({ text, type });
@@ -171,9 +183,10 @@ function App() {
       const doms = domData?.domains || [];
       setAvailableDomains(doms);
       if (doms.length > 0) {
-        setMergeTarget(prev => prev || doms[0]);
-        setExportDomain(prev => prev || doms[0]);
-        setIndexDomain(prev => prev || doms[0]);
+        const firstDom = getDomainName(doms[0]);
+        setMergeTarget(prev => prev || firstDom);
+        setExportDomain(prev => prev || firstDom);
+        setIndexDomain(prev => prev || firstDom);
       }
     } catch (err) {
       console.error("Failed to fetch initial data", err);
@@ -218,7 +231,7 @@ function App() {
   const handleRunMerge = async () => {
     let target = (mergeTarget || '').trim();
     if (!target && url) target = url;
-    if (!target && availableDomains.length > 0) target = availableDomains[0];
+    if (!target && availableDomains.length > 0) target = getDomainName(availableDomains[0]);
     if (!target) {
       showToast('Please select or enter a target domain or directory to merge.', 'error');
       return;
@@ -250,7 +263,7 @@ function App() {
   const handleRunIndex = async () => {
     let domain = (indexDomain || '').trim();
     if (!domain && !indexCustomDir && url) domain = url;
-    if (!domain && !indexCustomDir && availableDomains.length > 0) domain = availableDomains[0];
+    if (!domain && !indexCustomDir && availableDomains.length > 0) domain = getDomainName(availableDomains[0]);
     setIndexRunning(true);
     try {
       const data = await safeFetchJson('/api/index', {
@@ -278,11 +291,22 @@ function App() {
     showToast(`Loaded ${label} into Markdown Viewer`, 'info');
   };
 
+  // Browser download helper for text/markdown
+  const handleDownloadMarkdown = (content, filename = 'scrapi-extract.md') => {
+    if (!content) return;
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+    showToast(`Downloaded ${filename}`, 'success');
+  };
+
   // Jump from crawler panels directly to Books & Dataset Studio with context
   const handleJumpToStudio = (subTab, domainHint = null) => {
     setActiveTab('export');
     setStudioSubTab(subTab);
-    let domain = domainHint;
+    let domain = typeof domainHint === 'object' ? getDomainName(domainHint) : domainHint;
     if (!domain && url) {
       domain = url.replace(/^https?:\/\//i, '').split('/')[0];
     }
@@ -888,6 +912,25 @@ function App() {
           </div>
         </div>
 
+        {/* Center Dynamic Status Indicators */}
+        <div class="hidden lg:flex items-center space-x-2 font-mono text-[11px]">
+          {spiderActive || topicActive || loading ? (
+            <div class="flex items-center space-x-2 px-3 py-1 bg-amber-500/10 border border-amber-500/30 rounded-full animate-fade-in">
+              <span class="h-2 w-2 rounded-full bg-amber-400 animate-ping"></span>
+              <span class="font-bold text-amber-300">
+                {spiderActive ? 'SPIDER CRAWL ACTIVE' : topicActive ? 'EXHAUSTIVE TOPIC CRAWL' : 'ENGINE PROCESSING'}
+              </span>
+            </div>
+          ) : (
+            <div class="flex items-center space-x-2 px-3 py-1 bg-slate-900/80 border border-white/5 rounded-full text-slate-400">
+              <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
+              <span>SQLite: <strong class="text-slate-200">{history.length}</strong> scrapes</span>
+              <span class="text-slate-600">•</span>
+              <span><strong class="text-slate-200">{availableDomains.length}</strong> indexed sites</span>
+            </div>
+          )}
+        </div>
+
         <div class="flex items-center space-x-3">
           {/* MCP AI Connect Button */}
           <button
@@ -1055,13 +1098,50 @@ function App() {
             <div class="space-y-4 animate-fade-in">
               <div class="space-y-2">
                 <label class="text-xs text-slate-400 font-medium">Target URL</label>
-                <input 
-                  type="url" 
-                  placeholder="https://example.com/article" 
-                  value={url} 
-                  onChange={e => setUrl(e.target.value)}
-                  class="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
-                />
+                <div class="relative flex items-center">
+                  <input 
+                    type="url" 
+                    placeholder="https://example.com/article" 
+                    value={url} 
+                    onChange={e => setUrl(e.target.value)}
+                    class="w-full pl-3 pr-8 py-2 bg-slate-900 border border-white/10 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+                  />
+                  {url && (
+                    <button
+                      type="button"
+                      onClick={() => setUrl('')}
+                      class="absolute right-2.5 text-slate-400 hover:text-white text-xs bg-slate-800 rounded-full w-4 h-4 flex items-center justify-center transition-colors"
+                      title="Clear URL"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                {/* Quick Sample Badges */}
+                <div class="flex items-center space-x-1.5 pt-0.5">
+                  <span class="text-[10px] text-slate-500 font-medium">Quick:</span>
+                  <button
+                    type="button"
+                    onClick={() => setUrl('https://news.ycombinator.com')}
+                    class="px-2 py-0.5 text-[10px] font-mono bg-slate-900/90 hover:bg-slate-800 text-slate-400 hover:text-amber-300 rounded border border-white/5 transition-colors"
+                  >
+                    HN
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUrl('https://en.wikipedia.org/wiki/Web_scraping')}
+                    class="px-2 py-0.5 text-[10px] font-mono bg-slate-900/90 hover:bg-slate-800 text-slate-400 hover:text-blue-300 rounded border border-white/5 transition-colors"
+                  >
+                    Wikipedia
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUrl('https://developer.mozilla.org')}
+                    class="px-2 py-0.5 text-[10px] font-mono bg-slate-900/90 hover:bg-slate-800 text-slate-400 hover:text-teal-300 rounded border border-white/5 transition-colors"
+                  >
+                    MDN Docs
+                  </button>
+                </div>
               </div>
 
               <div class="space-y-2">
@@ -1212,13 +1292,25 @@ function App() {
                     <span>{discoveringCategories ? 'Discovering...' : '🔍 Auto-Detect Categories'}</span>
                   </button>
                 </div>
-                <input 
-                  type="url" 
-                  placeholder="https://example.com" 
-                  value={url} 
-                  onChange={e => setUrl(e.target.value)}
-                  class="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                />
+                <div class="relative flex items-center">
+                  <input 
+                    type="url" 
+                    placeholder="https://example.com" 
+                    value={url} 
+                    onChange={e => setUrl(e.target.value)}
+                    class="w-full pl-3 pr-8 py-2 bg-slate-900 border border-white/10 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                  />
+                  {url && (
+                    <button
+                      type="button"
+                      onClick={() => setUrl('')}
+                      class="absolute right-2.5 text-slate-400 hover:text-white text-xs bg-slate-800 rounded-full w-4 h-4 flex items-center justify-center transition-colors"
+                      title="Clear URL"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Discovered Topic Pills */}
@@ -1571,13 +1663,25 @@ function App() {
 
               <div class="space-y-2">
                 <label class="text-xs text-slate-400 font-medium">Seed URL</label>
-                <input 
-                  type="url" 
-                  placeholder="https://example.com" 
-                  value={url} 
-                  onChange={e => setUrl(e.target.value)}
-                  class="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                />
+                <div class="relative flex items-center">
+                  <input 
+                    type="url" 
+                    placeholder="https://example.com" 
+                    value={url} 
+                    onChange={e => setUrl(e.target.value)}
+                    class="w-full pl-3 pr-8 py-2 bg-slate-900 border border-white/10 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                  />
+                  {url && (
+                    <button
+                      type="button"
+                      onClick={() => setUrl('')}
+                      class="absolute right-2.5 text-slate-400 hover:text-white text-xs bg-slate-800 rounded-full w-4 h-4 flex items-center justify-center transition-colors"
+                      title="Clear URL"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div class="grid grid-cols-2 gap-2">
@@ -1929,14 +2033,63 @@ function App() {
                     )}
                   </div>
                 )}
-                <div class="flex justify-between items-center bg-slate-900 border border-white/5 p-3 rounded-xl">
-                  <span class="text-xs text-slate-400 font-mono">Word Count: {markdownOutput.split(/\s+/).length}</span>
-                  <button 
-                    onClick={handleCopyMarkdown}
-                    class="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-all active:scale-95 shadow-md shadow-blue-600/20"
-                  >
-                    Copy Markdown
-                  </button>
+                <div class="glass-card p-3 rounded-2xl flex flex-wrap items-center justify-between gap-3 animate-fade-in">
+                  <div class="flex flex-wrap items-center gap-2 text-xs font-mono text-slate-400">
+                    <div class="flex items-center space-x-1 px-2.5 py-1 bg-slate-950/80 rounded-lg border border-white/5">
+                      <span class="text-emerald-400 font-bold">
+                        {markdownOutput.trim().split(/\s+/).filter(Boolean).length.toLocaleString()}
+                      </span>
+                      <span class="text-slate-500">words</span>
+                    </div>
+                    <div class="flex items-center space-x-1 px-2.5 py-1 bg-slate-950/80 rounded-lg border border-white/5">
+                      <span class="text-blue-400 font-bold">
+                        ~{Math.max(1, Math.ceil(markdownOutput.trim().split(/\s+/).filter(Boolean).length / 200))}
+                      </span>
+                      <span class="text-slate-500">min read</span>
+                    </div>
+                    <div class="flex items-center space-x-1 px-2.5 py-1 bg-slate-950/80 rounded-lg border border-white/5">
+                      <span class="text-purple-400 font-bold">
+                        {markdownOutput.split('\n').length.toLocaleString()}
+                      </span>
+                      <span class="text-slate-500">lines</span>
+                    </div>
+                    <div class="hidden sm:flex items-center space-x-1 px-2.5 py-1 bg-slate-950/80 rounded-lg border border-white/5">
+                      <span class="text-slate-300 font-bold">
+                        {markdownOutput.length.toLocaleString()}
+                      </span>
+                      <span class="text-slate-500">chars</span>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center space-x-2">
+                    <button 
+                      type="button"
+                      onClick={handleCopyMarkdown}
+                      class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-all active:scale-95 border border-white/10 flex items-center space-x-1.5"
+                      title="Copy raw markdown to clipboard"
+                    >
+                      <span>📋</span>
+                      <span>Copy</span>
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => handleDownloadMarkdown(markdownOutput, 'scrapi-extract.md')}
+                      class="px-3 py-1.5 bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 text-xs font-bold rounded-xl transition-all active:scale-95 border border-blue-500/30 flex items-center space-x-1.5 shadow-md shadow-blue-600/10"
+                      title="Download markdown file to disk"
+                    >
+                      <span>💾</span>
+                      <span>Download .md</span>
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => handleJumpToStudio('merge', url)}
+                      class="px-3 py-1.5 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 text-xs font-bold rounded-xl transition-all active:scale-95 border border-emerald-500/30 flex items-center space-x-1.5 shadow-md shadow-emerald-600/10"
+                      title="Compile into Master Book in Studio"
+                    >
+                      <span>📖</span>
+                      <span class="hidden md:inline">Master Book</span>
+                    </button>
+                  </div>
                 </div>
                 <pre class="p-6 rounded-2xl border border-white/10 bg-slate-900 font-mono text-xs text-emerald-300 overflow-x-auto custom-scrollbar leading-relaxed whitespace-pre-wrap">
                   {markdownOutput}
@@ -2307,69 +2460,123 @@ function App() {
           {/* Tab 6: Master Books, Indexes & AI Datasets Studio */}
           <div class={`flex-1 h-full overflow-auto custom-scrollbar p-6 space-y-6 ${activeTab === 'export' ? 'block' : 'hidden'}`}>
             {/* Studio Header Banner */}
-            <div class="bg-gradient-to-r from-slate-900 via-emerald-950/20 to-slate-900 border border-emerald-500/20 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div class="space-y-1">
-                <div class="flex items-center space-x-2.5">
-                  <span class="text-2xl">📚</span>
-                  <h2 class="text-lg font-bold text-slate-100 tracking-wide">
-                    Master Books, Indexes & AI Datasets Studio
-                  </h2>
-                  <span class="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-bold">
-                    v2.0 Synthesis
-                  </span>
-                </div>
-                <p class="text-xs text-slate-400 max-w-2xl leading-relaxed">
-                  Compile entire scraped websites into continuous, single-file books with automated Table of Contents, build browsable master <code class="text-emerald-400">INDEX.md</code> manifests, or export clean fine-tuning datasets (<code class="text-blue-400">JSONL</code>, <code class="text-teal-400">CSV</code>, <code class="text-purple-400">JSON</code>) for RAG and LLMs.
-                </p>
-              </div>
-
-              {/* Quick Domain Indicator & Mode Switcher */}
-              <div class="flex flex-col items-end space-y-2 shrink-0">
-                <div class="flex items-center space-x-2">
-                  <span class="text-xs text-slate-400 font-mono">
-                    {availableDomains.length} Detected {availableDomains.length === 1 ? 'Site' : 'Sites'}
-                  </span>
-                  <button
-                    onClick={async () => {
-                      const d = await safeFetchJson('/api/domains');
-                      setAvailableDomains(d.domains || []);
-                      showToast('Site domains refreshed!', 'info');
-                    }}
-                    class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold flex items-center space-x-1"
-                  >
-                    <span>↻</span>
-                    <span>Refresh</span>
-                  </button>
+            <div class="bg-gradient-to-r from-slate-900 via-emerald-950/20 to-slate-900 border border-emerald-500/20 rounded-2xl p-6 shadow-xl space-y-4">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="space-y-1">
+                  <div class="flex items-center space-x-2.5">
+                    <span class="text-2xl">📚</span>
+                    <h2 class="text-lg font-bold text-slate-100 tracking-wide">
+                      Master Books, Indexes & AI Datasets Studio
+                    </h2>
+                    <span class="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-bold">
+                      v2.0 Synthesis
+                    </span>
+                  </div>
+                  <p class="text-xs text-slate-400 max-w-2xl leading-relaxed">
+                    Compile entire scraped websites into continuous, single-file books with automated Table of Contents, build browsable master <code class="text-emerald-400 font-mono">INDEX.md</code> manifests, or export clean fine-tuning datasets (<code class="text-blue-400 font-mono">JSONL</code>, <code class="text-teal-400 font-mono">CSV</code>, <code class="text-purple-400 font-mono">JSON</code>) for RAG and LLMs.
+                  </p>
                 </div>
 
-                {/* Sub-tab view selector pills */}
-                <div class="flex bg-slate-950 p-1 rounded-xl border border-white/5 space-x-1 text-xs">
-                  <button
-                    onClick={() => setStudioSubTab('all')}
-                    class={`px-3 py-1 rounded-lg font-bold transition-all ${studioSubTab === 'all' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
-                  >
-                    🗂️ All 3 Tools
-                  </button>
-                  <button
-                    onClick={() => setStudioSubTab('merge')}
-                    class={`px-3 py-1 rounded-lg font-bold transition-all ${studioSubTab === 'merge' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
-                  >
-                    📖 Book Merger
-                  </button>
-                  <button
-                    onClick={() => setStudioSubTab('export')}
-                    class={`px-3 py-1 rounded-lg font-bold transition-all ${studioSubTab === 'export' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
-                  >
-                    🤖 Dataset Exporter
-                  </button>
-                  <button
-                    onClick={() => setStudioSubTab('index')}
-                    class={`px-3 py-1 rounded-lg font-bold transition-all ${studioSubTab === 'index' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
-                  >
-                    📑 Master Index
-                  </button>
+                {/* Quick Domain Indicator & Mode Switcher */}
+                <div class="flex flex-col items-end space-y-2 shrink-0">
+                  <div class="flex items-center space-x-2">
+                    <span class="text-xs text-slate-400 font-mono">
+                      {availableDomains.length} Detected {availableDomains.length === 1 ? 'Site' : 'Sites'}
+                    </span>
+                    <button
+                      onClick={async () => {
+                        const d = await safeFetchJson('/api/domains');
+                        setAvailableDomains(d.domains || []);
+                        showToast('Site domains refreshed!', 'info');
+                      }}
+                      class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold flex items-center space-x-1"
+                    >
+                      <span>↻</span>
+                      <span>Refresh</span>
+                    </button>
+                  </div>
+
+                  {/* Sub-tab view selector pills */}
+                  <div class="flex bg-slate-950 p-1 rounded-xl border border-white/5 space-x-1 text-xs">
+                    <button
+                      onClick={() => setStudioSubTab('all')}
+                      class={`px-3 py-1 rounded-lg font-bold transition-all ${studioSubTab === 'all' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      🗂️ All 3 Tools
+                    </button>
+                    <button
+                      onClick={() => setStudioSubTab('merge')}
+                      class={`px-3 py-1 rounded-lg font-bold transition-all ${studioSubTab === 'merge' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      📖 Book Merger
+                    </button>
+                    <button
+                      onClick={() => setStudioSubTab('export')}
+                      class={`px-3 py-1 rounded-lg font-bold transition-all ${studioSubTab === 'export' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      🤖 Dataset Exporter
+                    </button>
+                    <button
+                      onClick={() => setStudioSubTab('index')}
+                      class={`px-3 py-1 rounded-lg font-bold transition-all ${studioSubTab === 'index' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      📑 Master Index
+                    </button>
+                  </div>
                 </div>
               </div>
+
+              {/* Quick Sites Pills: 1-click select target across all tools */}
+              {availableDomains.length > 0 && (
+                <div class="pt-2 border-t border-white/5 flex items-center space-x-1.5 overflow-x-auto custom-scrollbar">
+                  <span class="text-[10px] uppercase font-bold text-slate-500 tracking-wider shrink-0 mr-1">Active Target:</span>
+                  {(mergeTarget || exportDomain || indexDomain) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMergeTarget('');
+                        setExportDomain('');
+                        setIndexDomain('');
+                        showToast('Reset active target to Global/All', 'info');
+                      }}
+                      class="px-2 py-1 rounded-lg text-xs font-semibold shrink-0 transition-all bg-slate-900 text-slate-400 hover:text-white border border-white/10 hover:border-white/20 active:scale-95"
+                      title="Clear active target selection"
+                    >
+                      ✕ All
+                    </button>
+                  )}
+                  {availableDomains.map((dom, i) => {
+                    const name = getDomainName(dom);
+                    const cnt = typeof dom === 'object' && dom.count ? dom.count : null;
+                    const isSelected = mergeTarget === name || exportDomain === name || indexDomain === name;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          setMergeTarget(name);
+                          setExportDomain(name);
+                          setIndexDomain(name);
+                          showToast(`Target set to ${name}`, 'info');
+                        }}
+                        class={`px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0 transition-all flex items-center space-x-1.5 border active:scale-95 ${
+                          isSelected
+                            ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/50 shadow-md font-bold'
+                            : 'bg-slate-950/80 text-slate-400 border-white/5 hover:border-white/20 hover:text-slate-200'
+                        }`}
+                      >
+                        <span>🌐</span>
+                        <span>{name}</span>
+                        {cnt !== null && (
+                          <span class={`text-[9px] px-1 py-0.2 rounded font-mono ${isSelected ? 'bg-emerald-500/30 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                            {cnt}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Main Tools Container: Grid or Focused View */}
@@ -2377,7 +2584,7 @@ function App() {
               
               {/* Tool Card 1: 📖 Single-File Book Merger */}
               {(studioSubTab === 'all' || studioSubTab === 'merge') && (
-                <div class="bg-slate-900 border border-emerald-500/20 rounded-2xl p-6 space-y-5 shadow-xl flex flex-col justify-between">
+                <div class="glass-card hover:border-emerald-500/40 glow-emerald rounded-2xl p-6 space-y-5 shadow-xl flex flex-col justify-between transition-all duration-300">
                   <div class="space-y-4">
                     <div class="flex items-start justify-between">
                       <div class="flex items-center space-x-2.5">
@@ -2407,7 +2614,9 @@ function App() {
                           <option value="">No domains found yet</option>
                         ) : (
                           availableDomains.map((dom, i) => (
-                            <option key={i} value={dom}>{dom}</option>
+                            <option key={i} value={getDomainName(dom)}>
+                              {getDomainLabel(dom)}
+                            </option>
                           ))
                         )}
                       </select>
@@ -2416,7 +2625,7 @@ function App() {
                         placeholder="Or custom folder (e.g. ./output/domain_com)"
                         value={mergeTarget}
                         onChange={e => setMergeTarget(e.target.value)}
-                        class="w-full px-3 py-1.5 bg-slate-950 border border-white/5 rounded-lg text-[11px] text-slate-300 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                        class="w-full px-3 py-1.5 bg-slate-950 border border-white/5 rounded-lg text-[11px] text-slate-300 placeholder-slate-600 focus:outline-none focus:border-emerald-500 font-mono"
                       />
                     </div>
 
@@ -2567,7 +2776,7 @@ function App() {
                             onClick={() => handleLoadIntoMarkdownViewer(mergeResult.preview, mergeResult.title || 'Master Book')}
                             class="flex-1 py-1.5 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/30 rounded-lg text-[10px] font-bold transition-all text-center"
                           >
-                            👁️ View in Markdown Tab
+                            👁️ View in Tab
                           </button>
                           <a
                             href={`/api/file?path=${encodeURIComponent(mergeResult.destination)}`}
@@ -2575,9 +2784,26 @@ function App() {
                             class="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 rounded-lg text-[10px] font-bold transition-all text-center flex items-center justify-center space-x-1"
                           >
                             <span>📥</span>
-                            <span>Download .md</span>
+                            <span>Download</span>
                           </a>
                         </div>
+                        {/* Quick Peek Accordion Toggle */}
+                        {mergeResult.preview && (
+                          <div class="space-y-1.5 pt-1 border-t border-white/5">
+                            <button
+                              type="button"
+                              onClick={() => setShowMergePreview(!showMergePreview)}
+                              class="w-full py-1 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-white/5 rounded text-[10px] font-medium flex items-center justify-center space-x-1 transition-colors"
+                            >
+                              <span>{showMergePreview ? '▲ Hide Document Preview' : '▼ Quick Peek Book Table of Contents'}</span>
+                            </button>
+                            {showMergePreview && (
+                              <pre class="p-2.5 bg-slate-950 rounded-lg border border-white/5 font-mono text-[9px] text-emerald-300 max-h-48 overflow-y-auto custom-scrollbar whitespace-pre-wrap leading-relaxed animate-fade-in">
+                                {mergeResult.preview}
+                              </pre>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2586,7 +2812,7 @@ function App() {
 
               {/* Tool Card 2: 🤖 AI/ML Dataset Exporter */}
               {(studioSubTab === 'all' || studioSubTab === 'export') && (
-                <div class="bg-slate-900 border border-blue-500/20 rounded-2xl p-6 space-y-5 shadow-xl flex flex-col justify-between">
+                <div class="glass-card hover:border-blue-500/40 glow-blue rounded-2xl p-6 space-y-5 shadow-xl flex flex-col justify-between transition-all duration-300">
                   <div class="space-y-4">
                     <div class="flex items-start justify-between">
                       <div class="flex items-center space-x-2.5">
@@ -2658,7 +2884,9 @@ function App() {
                         >
                           <option value="">All Domains (Global DB)</option>
                           {availableDomains.map((dom, i) => (
-                            <option key={i} value={dom}>{dom}</option>
+                            <option key={i} value={getDomainName(dom)}>
+                              {getDomainLabel(dom)}
+                            </option>
                           ))}
                         </select>
                       </div>
@@ -2799,7 +3027,7 @@ function App() {
 
               {/* Tool Card 3: 📑 Master Table of Contents & Manifest */}
               {(studioSubTab === 'all' || studioSubTab === 'index') && (
-                <div class="bg-slate-900 border border-purple-500/20 rounded-2xl p-6 space-y-5 shadow-xl flex flex-col justify-between">
+                <div class="glass-card hover:border-purple-500/40 glow-purple rounded-2xl p-6 space-y-5 shadow-xl flex flex-col justify-between transition-all duration-300">
                   <div class="space-y-4">
                     <div class="flex items-start justify-between">
                       <div class="flex items-center space-x-2.5">
@@ -2830,7 +3058,9 @@ function App() {
                           <option value="">No domains found yet</option>
                         ) : (
                           availableDomains.map((dom, i) => (
-                            <option key={i} value={dom}>{dom}</option>
+                            <option key={i} value={getDomainName(dom)}>
+                              {getDomainLabel(dom)}
+                            </option>
                           ))
                         )}
                       </select>
@@ -2839,7 +3069,7 @@ function App() {
                         placeholder="Or scan custom folder on disk (e.g. ./output/domain_com)"
                         value={indexCustomDir}
                         onChange={e => setIndexCustomDir(e.target.value)}
-                        class="w-full px-3 py-1.5 bg-slate-950 border border-white/5 rounded-lg text-[11px] text-slate-300 placeholder-slate-600 focus:outline-none focus:border-purple-500"
+                        class="w-full px-3 py-1.5 bg-slate-950 border border-white/5 rounded-lg text-[11px] text-slate-300 placeholder-slate-600 focus:outline-none focus:border-purple-500 font-mono"
                       />
                     </div>
 
@@ -2910,7 +3140,7 @@ function App() {
                             onClick={() => handleLoadIntoMarkdownViewer(indexResult.preview, 'Master INDEX.md')}
                             class="flex-1 py-1.5 bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 border border-purple-500/30 rounded-lg text-[10px] font-bold transition-all text-center"
                           >
-                            👁️ View in Markdown Tab
+                            👁️ View in Tab
                           </button>
                           <a
                             href={`/api/file?path=${encodeURIComponent(indexResult.indexPath)}`}
@@ -2921,6 +3151,23 @@ function App() {
                             <span>INDEX.md</span>
                           </a>
                         </div>
+                        {/* Quick Peek Accordion Toggle */}
+                        {indexResult.preview && (
+                          <div class="space-y-1.5 pt-1 border-t border-white/5">
+                            <button
+                              type="button"
+                              onClick={() => setShowIndexPreview(!showIndexPreview)}
+                              class="w-full py-1 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-white/5 rounded text-[10px] font-medium flex items-center justify-center space-x-1 transition-colors"
+                            >
+                              <span>{showIndexPreview ? '▲ Hide INDEX.md Preview' : '▼ Quick Peek INDEX.md Hierarchy'}</span>
+                            </button>
+                            {showIndexPreview && (
+                              <pre class="p-2.5 bg-slate-950 rounded-lg border border-white/5 font-mono text-[9px] text-purple-300 max-h-48 overflow-y-auto custom-scrollbar whitespace-pre-wrap leading-relaxed animate-fade-in">
+                                {indexResult.preview}
+                              </pre>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

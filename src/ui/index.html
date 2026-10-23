@@ -3,7 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🕷️ Scrapi Web Console</title>
+  <title>🕷️ Scrapi Web Console | Advanced Multi-Tier Web Scraping Engine</title>
+  <meta name="description" content="Scrapi Web Console: Multi-tier web scraping engine with Playwright dynamic SPA rendering, Cloudflare Turnstile evasion, adaptive self-healing selectors, recursive spidering, and single-file master book compiler.">
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Tailwind Configuration for custom animations & styling -->
@@ -11,6 +16,10 @@
     tailwind.config = {
       theme: {
         extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
           colors: {
             brand: {
               50: '#f0f7ff',
@@ -28,6 +37,18 @@
           },
           animation: {
             'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'fade-in': 'fadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+            'slide-up': 'slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+          },
+          keyframes: {
+            fadeIn: {
+              '0%': { opacity: '0', transform: 'translateY(4px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            },
+            slideUp: {
+              '0%': { opacity: '0', transform: 'translateY(12px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            }
           }
         }
       }
@@ -36,33 +57,53 @@
   <!-- React & ReactDOM CDN -->
   <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-  <!-- Babel for JSX transpiling in browser -->
   
   <!-- Custom CSS for custom scrolls and glassmorphism -->
   <style>
     body {
       background-color: #020617;
-      color: #f3f4f6;
-      font-family: 'Inter', sans-serif;
+      color: #f1f5f9;
+      font-family: 'Inter', system-ui, sans-serif;
+      letter-spacing: -0.01em;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
     }
     .glass {
-      background: rgba(15, 23, 42, 0.65);
-      backdrop-filter: blur(12px);
+      background: rgba(15, 23, 42, 0.72);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
       border: 1px solid rgba(255, 255, 255, 0.08);
     }
+    .glass-card {
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
     .custom-scrollbar::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
+      width: 5px;
+      height: 5px;
     }
     .custom-scrollbar::-webkit-scrollbar-track {
       background: rgba(255, 255, 255, 0.02);
+      border-radius: 9999px;
     }
     .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.15);
-      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.16);
+      border-radius: 9999px;
+      transition: background 0.2s ease;
     }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-      background: rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.3);
+    }
+    .glow-emerald {
+      box-shadow: 0 0 20px -3px rgba(16, 185, 129, 0.15);
+    }
+    .glow-blue {
+      box-shadow: 0 0 20px -3px rgba(59, 130, 246, 0.15);
+    }
+    .glow-purple {
+      box-shadow: 0 0 20px -3px rgba(168, 85, 247, 0.15);
     }
   </style>
 </head>
