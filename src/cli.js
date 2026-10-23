@@ -905,6 +905,79 @@ program
     }
   });
 
+// Merge command: Combine all scraped documents into a single unified Markdown document/book
+program
+  .command('merge [target]')
+  .description('Combine all scraped pages into a single organized Markdown document or book with a Table of Contents')
+  .option('-o, --output <file>', 'Destination filepath for merged document')
+  .option('--order <type>', 'Document ordering: hierarchy, chronological, or alphabetical', 'hierarchy')
+  .option('--title <title>', 'Custom title for merged document')
+  .option('--no-toc', 'Omit Table of Contents header')
+  .option('--base-dir <dir>', 'Base directory containing scrapes', './output')
+  .action(async (target, options) => {
+    await initStorage(undefined, options.baseDir);
+    const spinner = ora('Compiling documents into single master file...').start();
+    try {
+      const { DocumentMerger } = await import('./exporter/document_merger.js');
+      const result = await DocumentMerger.merge({
+        target: target || options.baseDir,
+        order: options.order,
+        outputBaseDir: options.baseDir,
+        destination: options.output,
+        title: options.title,
+        includeToc: options.toc !== false
+      });
+
+      spinner.succeed(chalk.green('Document merged successfully!'));
+      console.log(chalk.cyan(`   Document Title:     ${result.title}`));
+      console.log(chalk.cyan(`   Chapters Compiled:  ${result.chapterCount}`));
+      console.log(chalk.cyan(`   Total Word Count:   ~${result.totalWords.toLocaleString()} words`));
+      console.log(chalk.magenta.bold(`   Merged Output:      ${chalk.white.bold(result.destination)}`));
+      console.log('');
+    } catch (err) {
+      spinner.fail(chalk.red(`Failed to merge documents: ${err.message}`));
+    }
+  });
+
+// Export-all command: Dump SQLite scrapes into standard AI/ML datasets (JSONL, CSV, JSON)
+program
+  .command('export-all')
+  .description('Export scraped data from SQLite into AI/ML datasets (JSONL, CSV, JSON) for RAG or fine-tuning')
+  .option('-f, --format <format>', 'Export format: jsonl, csv, or json', 'jsonl')
+  .option('-o, --output <file>', 'Destination file path')
+  .option('-d, --domain <name>', 'Filter by domain name (e.g. example.com)')
+  .option('-c, --category <name>', 'Filter by category tag')
+  .option('--status <status>', 'Filter by status: success, failed, or all', 'success')
+  .option('-l, --limit <number>', 'Maximum records to export')
+  .option('--no-content', 'Exclude full markdown content to export metadata only')
+  .option('--base-dir <dir>', 'Base output directory where markdown files reside', './output')
+  .action(async (options) => {
+    await initStorage(undefined, options.baseDir);
+    const spinner = ora(`Exporting dataset (${options.format.toUpperCase()})...`).start();
+    try {
+      const { DataExporter } = await import('./exporter/data_exporter.js');
+      const result = await DataExporter.exportDataset({
+        format: options.format,
+        domain: options.domain,
+        category: options.category,
+        status: options.status,
+        limit: options.limit ? parseInt(options.limit, 10) : undefined,
+        includeContent: options.content !== false,
+        outputBaseDir: options.baseDir,
+        destination: options.output
+      });
+
+      spinner.succeed(chalk.green(`Dataset exported successfully!`));
+      console.log(chalk.cyan(`   Format:             ${result.format.toUpperCase()}`));
+      console.log(chalk.cyan(`   Records Exported:   ${result.recordCount}`));
+      console.log(chalk.cyan(`   Total Word Count:   ~${result.totalWords.toLocaleString()} words`));
+      console.log(chalk.magenta.bold(`   Destination:        ${chalk.white.bold(result.destination)}`));
+      console.log('');
+    } catch (err) {
+      spinner.fail(chalk.red(`Dataset export failed: ${err.message}`));
+    }
+  });
+
 // Benchmark command
 program
   .command('benchmark')
