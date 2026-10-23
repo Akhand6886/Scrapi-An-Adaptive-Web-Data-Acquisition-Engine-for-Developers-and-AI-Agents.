@@ -18,7 +18,8 @@ import {
   deleteSpiderCheckpoint,
   getAllElementFingerprints,
   saveElementFingerprint,
-  deleteElementFingerprint
+  deleteElementFingerprint,
+  getAllDomains
 } from '../storage.js';
 import { scrapePage, discoverCategories, autoDetectLinkSelector } from '../scraper.js';
 import { runSpider } from '../spider.js';
@@ -28,6 +29,8 @@ import { AdaptiveEngine } from '../parser/index.js';
 import * as cheerio from 'cheerio';
 import { extractEntities } from '../parser/cluster_extractor.js';
 import { globalBandit } from '../trees/bandit.js';
+import { DataExporter, DocumentMerger } from '../exporter/index.js';
+import { IndexGenerator } from '../spiders/index_generator.js';
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -744,11 +747,21 @@ app.post('/api/query', async (req, res) => {
   }
 });
 
-// GET export scrapes (jsonl, csv, json)
-app.get('/api/export', (req, res) => {
-  const { format = 'jsonl', category } = req.query;
+// GET all unique domains for selection in UI
+app.get('/api/domains', (req, res) => {
   try {
-    const scrapes = getAllScrapes(category || null);
+    const domains = getAllDomains();
+    res.json({ domains });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET stream export scrapes directly (browser download)
+app.get('/api/export', (req, res) => {
+  const { format = 'jsonl', category, domain } = req.query;
+  try {
+    const scrapes = domain ? getScrapesByDomain(domain) : getAllScrapes(category || null);
     
     if (format === 'jsonl') {
       res.setHeader('Content-Type', 'application/x-ndjson');
@@ -779,6 +792,97 @@ app.get('/api/export', (req, res) => {
       res.setHeader('Content-Type', 'application/json');
       return res.json(scrapes);
     }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST export dataset with full options (JSONL, CSV, JSON)
+app.post('/api/export', async (req, res) => {
+  try {
+    const { format = 'jsonl', domain, category, status = 'success', limit, includeContent = true, destination } = req.body;
+    const result = await DataExporter.exportDataset({
+      format,
+      domain,
+      category,
+      status,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      includeContent: includeContent !== false,
+      destination
+    });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST merge multiple markdown documents into single master file
+app.post('/api/merge', async (req, res) => {
+  try {
+    const { target, order = 'hierarchy', title, includeToc = true, demoteHeadings = true, destination } = req.body;
+    const result = await DocumentMerger.merge({
+      target,
+      order,
+      title,
+      includeToc: includeToc !== false,
+      demoteHeadings: demoteHeadings !== false,
+      destination
+    });
+
+    const preview = await fs.readFile(result.destination, 'utf-8');
+    res.json({
+      success: true,
+      ...result,
+      count: result.chapterCount || 0,
+      words: result.totalWords || 0,
+      preview: preview.slice(0, 10000)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST generate or regenerate master INDEX.md and manifest.json
+app.post('/api/index', async (req, res) => {
+  try {
+    const { domain, targetDir } = req.body;
+    let result;
+    if (targetDir) {
+      result = await IndexGenerator.fromDirectory(targetDir, { domain });
+    } else {
+      const cleanDomain = (domain || '').replace(/^https?:\/\//i, '').split('/')[0].replace(/[^a-zA-Z0-9.-]/g, '_');
+      const dir = path.join('./output', cleanDomain);
+      result = await IndexGenerator.generateIndex([], {
+        targetDir: dir,
+        outputBaseDir: './output',
+        domain: cleanDomain,
+        mergeExisting: true
+      });
+    }
+    const indexContent = result.indexPath ? await fs.readFile(result.indexPath, 'utf-8') : '';
+    res.json({
+      success: true,
+      ...result,
+      count: result.totalPages || 0,
+      words: result.totalWords || 0,
+      preview: indexContent.slice(0, 10000)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET file content for viewing/downloading in UI
+app.get('/api/file', async (req, res) => {
+  try {
+    const filePath = req.query.path;
+    if (!filePath) return res.status(400).json({ error: 'Missing path parameter' });
+    const resolved = path.resolve(filePath);
+    if (!resolved.startsWith(path.resolve('.'))) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const content = await fs.readFile(resolved, 'utf-8');
+    res.json({ path: resolved, content });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -371,6 +371,30 @@ export function getScrapesByDomain(domain) {
 }
 
 /**
+ * Retrieves all unique scraped domains and their page counts.
+ * @returns {Array<{ domain: string, count: number }>}
+ */
+export function getAllDomains() {
+  if (!db) return [];
+  try {
+    const all = db.prepare("SELECT url FROM scrapes WHERE status = 'success' AND url IS NOT NULL").all();
+    const counts = new Map();
+    for (const r of all) {
+      try {
+        const d = new URL(r.url).hostname;
+        counts.set(d, (counts.get(d) || 0) + 1);
+      } catch (_) {}
+    }
+    return Array.from(counts.entries())
+      .map(([domain, count]) => ({ domain, count }))
+      .sort((a, b) => b.count - a.count);
+  } catch (err) {
+    console.error('[Storage Error] getAllDomains failed:', err.message);
+    return [];
+  }
+}
+
+/**
  * Retrieves a scrape by its ID.
  * @param {number} id 
  * @returns {object|null}
