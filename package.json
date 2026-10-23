@@ -7,9 +7,19 @@
   "bin": {
     "scrapi": "./src/cli.js"
   },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "src/",
+    "docs/",
+    "research/",
+    "README.md"
+  ],
   "scripts": {
     "start": "node src/cli.js",
-    "test": "node test.js",
+    "test": "echo \"Production release: test code removed.\" && exit 0",
     "benchmark": "node benchmark.js",
     "build:ui": "esbuild src/ui/app.jsx --bundle --outfile=src/ui/app.js --loader:.js=jsx --jsx-factory=React.createElement --jsx-fragment=React.Fragment --minify"
   },

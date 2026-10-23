@@ -978,17 +978,32 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 app.use(express.static(__dirname));
 
 const PORT = process.env.PORT || 3001;
+const HOST = process.env.HOST || '0.0.0.0';
+
 initStorage().then(() => {
-  app.listen(PORT, async () => {
-    console.log(`🚀 Scrapi Local Server running on http://localhost:${PORT}`);
-    console.log('⚡ Compiling React UI bundle...');
-    exec('npm run build:ui', (err, stdout, stderr) => {
-      if (err) {
-        console.error('⚠️ Failed to compile UI bundle:', stderr);
-      } else {
-        console.log('✓ UI Bundle compiled successfully!');
-      }
-    });
+  app.listen(PORT, HOST, async () => {
+    const displayHost = HOST === '0.0.0.0' ? 'localhost' : HOST;
+    console.log(`🚀 Scrapi Server running on http://${displayHost}:${PORT}`);
+
+    const bundlePath = path.join(__dirname, 'app.js');
+    let bundleExists = false;
+    try {
+      await fs.access(bundlePath);
+      bundleExists = true;
+    } catch (_) {}
+
+    if (!bundleExists && process.env.NODE_ENV !== 'production') {
+      console.log('⚡ Compiling React UI bundle...');
+      exec('npm run build:ui', (err, stdout, stderr) => {
+        if (err) {
+          console.error('⚠️ Failed to compile UI bundle:', stderr);
+        } else {
+          console.log('✓ UI Bundle compiled successfully!');
+        }
+      });
+    } else if (bundleExists) {
+      console.log('✓ Production UI bundle ready.');
+    }
   });
 }).catch(err => {
   console.error('❌ Failed to initialize SQLite storage:', err.message);
