@@ -9,7 +9,9 @@ import {
   initStorage, 
   getAllProfiles, 
   saveProfile, 
+  deleteProfile,
   getAllScrapes, 
+  deleteScrape,
   insertScrape, 
   saveMarkdownFile, 
   downloadMediaFiles,
@@ -115,6 +117,16 @@ app.post('/api/profiles', (req, res) => {
       }
     } catch (e) {}
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE profile
+app.delete('/api/profiles/:id', (req, res) => {
+  try {
+    const success = deleteProfile(req.params.id);
+    res.json({ success });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -253,6 +265,16 @@ app.get('/api/scrapes', (req, res) => {
     const category = req.query.category || null;
     const scrapes = getAllScrapes(category);
     res.json(scrapes);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE single scrape
+app.delete('/api/scrapes/:id', (req, res) => {
+  try {
+    const success = deleteScrape(req.params.id);
+    res.json({ success });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -772,6 +794,10 @@ app.get('/api/mcp/info', (req, res) => {
       {
         name: 'scrapi_crawl',
         description: 'Run site crawl and discover internal links'
+      },
+      {
+        name: 'scrapi_entities',
+        description: 'Unsupervised repeating entity and catalog extractor (products, news, cards)'
       }
     ],
     configSnippets: {
