@@ -50,7 +50,10 @@ import {
   TierRouterTree,
   ContentExtractorTree,
   CrawlPriorityTree,
-  globalBandit
+  globalBandit,
+
+  // MCP AI Agent Integration
+  MCPServer
 } from 'scrapi';
 ```
 
@@ -176,10 +179,20 @@ Checks if a URL has already been successfully scraped in SQLite.
 - **Parameters**: `url` *(string)*.
 - **Returns**: `boolean`.
 
-### `getAllScrapes(category)`
-Queries historical scrape records from SQLite with optional category filtering.
-- **Parameters**: `category` *(string, optional)*.
+### `getAllScrapes(category, limit)`
+Queries historical scrape records from SQLite with optional category filtering and pagination limit.
+- **Parameters**: `category` *(string, optional)*, `limit` *(number, optional)*.
 - **Returns**: `Array<object>`.
+
+### `deleteScrape(id)`
+Deletes a scrape record from SQLite by ID.
+- **Parameters**: `id` *(number)*.
+- **Returns**: `boolean`.
+
+### `deleteProfile(id)`
+Deletes a visual scraper profile from SQLite by ID.
+- **Parameters**: `id` *(number)*.
+- **Returns**: `boolean`.
 
 ### `saveMarkdownFile(markdown, metadata, options)`
 Saves formatted Markdown content and sidecar JSON metadata to disk under hierarchical domain subfolders.
@@ -200,3 +213,23 @@ Global Thompson Sampling multi-armed bandit instance.
   - `recordResult(domain, arm, success)` ➔ `void`
   - `shouldBypassProbe(domain)` ➔ `boolean`
   - `getPriors(domain)` ➔ `object`
+
+---
+
+## 6. Model Context Protocol (MCP) APIs ([`src/mcp/server.js`](../src/mcp/server.js))
+
+### `class MCPServer`
+Class implementing the JSON-RPC stdio protocol for AI agents (Cursor, Claude Desktop, Antigravity).
+- **Constructor Options**: `{}`.
+- **Properties**:
+  - `tools` *(Array<object>)*: Registered tools (`scrapi_fetch`, `scrapi_extract`, `scrapi_adaptive_query`, `scrapi_crawl`, `scrapi_entities`).
+- **Methods**:
+  - `start()` ➔ `void`: Binds readline interface to `process.stdin` and listens for JSON-RPC 2.0 frames.
+  - `handleRequest(message)` ➔ `Promise<object>`: Dispatches `tools/list` and `tools/call`.
+- **Example**:
+  ```javascript
+  import { MCPServer } from 'scrapi';
+
+  const server = new MCPServer();
+  server.start();
+  ```

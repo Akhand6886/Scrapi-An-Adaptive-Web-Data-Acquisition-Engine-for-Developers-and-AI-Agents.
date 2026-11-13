@@ -7,3 +7,4 @@ export * from './spiders/index.js';
 export * from './storage.js';
 export * from './scraper.js';
 export * from './trees/index.js';
+export * from './mcp/server.js';
