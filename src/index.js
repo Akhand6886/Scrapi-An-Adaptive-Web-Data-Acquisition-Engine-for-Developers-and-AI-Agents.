@@ -1,3 +1,5 @@
+import './polyfill.js';
+
 // Scrapi Core Subsystems
 export * from './fetchers/index.js';
 export * from './parser/index.js';

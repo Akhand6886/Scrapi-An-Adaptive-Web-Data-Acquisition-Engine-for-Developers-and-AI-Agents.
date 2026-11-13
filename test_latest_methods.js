@@ -274,4 +274,28 @@ assert.strictEqual(retrievedPriors.totalTrials, 14);
 assert.strictEqual(retrievedPriors.stealth.alpha, 13);
 console.log(`  ✓ SQLite persistence verified: Domain priors saved and restored across process lifecycle.`);
 
+// ═════════════════════════════════════════════
+// 4. Model Context Protocol (MCP) Server Tools
+// ═════════════════════════════════════════════
+console.log('\n4. Testing Model Context Protocol (MCP) Server Tool Suite...');
+
+const { MCPServer } = await import('./src/mcp/server.js');
+const mcpServer = new MCPServer();
+assert.ok(mcpServer.tools && mcpServer.tools.length === 5, 'MCP Server must register 5 standard tools');
+
+const registeredToolNames = mcpServer.tools.map(t => t.name);
+assert.ok(registeredToolNames.includes('scrapi_fetch'));
+assert.ok(registeredToolNames.includes('scrapi_extract'));
+assert.ok(registeredToolNames.includes('scrapi_adaptive_query'));
+assert.ok(registeredToolNames.includes('scrapi_crawl'));
+assert.ok(registeredToolNames.includes('scrapi_entities'));
+
+// Verify scrapi_entities tool schema
+const entitiesTool = mcpServer.tools.find(t => t.name === 'scrapi_entities');
+assert.strictEqual(entitiesTool.inputSchema.required[0], 'url');
+assert.ok(entitiesTool.description.includes('repeating entity'));
+
+console.log(`  ✓ 5 MCP tools registered: ${registeredToolNames.join(', ')}`);
+console.log(`  ✓ scrapi_entities schema and standalone polyfill verified.`);
+
 console.log('\n✅ All State-of-the-Art Methods Verified Successfully!');

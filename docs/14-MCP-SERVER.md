@@ -49,7 +49,7 @@ graph LR
 
 ## 3. Exposed MCP Tools
 
-The server exposes 4 tools with strict JSON Schema definitions:
+The server exposes 5 tools with strict JSON Schema definitions:
 
 ### 3.1 `scrapi_fetch`
 Fetches a web page and converts it into clean, token-efficient Markdown with structured metadata.
@@ -141,6 +141,25 @@ Crawls a website seed URL to discover and extract connected pages up to a given 
   }
   ```
 - **Returns**: Array of scraped page objects (`url`, `title`, `filename`, `status`).
+
+---
+
+### 3.5 `scrapi_entities`
+Unsupervised repeating entity and catalog extractor that discovers repeating card clusters (products, prices, news feeds, search results) without needing manual CSS selectors.
+
+- **Input Schema**:
+  ```json
+  {
+    "type": "object",
+    "properties": {
+      "url": { "type": "string", "description": "Target catalog, listing, or news feed URL" },
+      "limit": { "type": "number", "default": 50, "description": "Maximum number of items to return" },
+      "fetcher": { "type": "string", "enum": ["static", "dynamic", "stealth"], "default": "static" }
+    },
+    "required": ["url"]
+  }
+  ```
+- **Returns**: Object containing `url`, `detectedType` (`catalog`, `news`, `gallery`, `list`), `totalItemsFound`, `confidence`, and an array of extracted `entities` (`title`, `price`, `url`, `image`, `badge`, `date`, `description`).
 
 ---
 
