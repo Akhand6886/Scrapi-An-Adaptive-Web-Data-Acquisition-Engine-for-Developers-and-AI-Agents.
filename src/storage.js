@@ -471,6 +471,40 @@ export function getAllProfiles() {
 }
 
 /**
+ * Deletes a profile by ID.
+ * @param {number|string} id 
+ * @returns {boolean}
+ */
+export function deleteProfile(id) {
+  if (!db) return false;
+  try {
+    const stmt = db.prepare('DELETE FROM profiles WHERE id = ?');
+    stmt.run(id);
+    return true;
+  } catch (err) {
+    console.error(`[Storage Error] deleteProfile failed for ${id}:`, err.message);
+    return false;
+  }
+}
+
+/**
+ * Deletes a scrape record by ID.
+ * @param {number|string} id 
+ * @returns {boolean}
+ */
+export function deleteScrape(id) {
+  if (!db) return false;
+  try {
+    const stmt = db.prepare('DELETE FROM scrapes WHERE id = ?');
+    stmt.run(id);
+    return true;
+  } catch (err) {
+    console.error(`[Storage Error] deleteScrape failed for ${id}:`, err.message);
+    return false;
+  }
+}
+
+/**
  * Retrieves a cached HTTP response.
  * @param {string} url 
  * @returns {object|null}
