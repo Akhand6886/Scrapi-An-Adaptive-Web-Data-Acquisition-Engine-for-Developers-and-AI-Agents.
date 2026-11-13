@@ -25,6 +25,7 @@ graph TD
         DynamicFetcher --> Response
         StealthFetcher --> Response
         Response --> Selector["Selector & AdaptorElement (CSS/XPath/Regex)"]
+        Response --> Cluster["ClusterExtractor (Unsupervised Repeating Entity Induction)"]
         Selector --> AdaptiveEngine["AdaptiveEngine (Self-Healing DOM Fingerprints)"]
         Selector --> MarkdownEngine["MarkdownEngine (GFM Tables, Code Blocks, Media)"]
     end
@@ -36,8 +37,10 @@ graph TD
     end
     
     subgraph "AI & Storage Subsystem"
-        AdaptiveEngine --> SQLite["SQLite Database (History, Signatures, Checkpoints)"]
+        AdaptiveEngine --> SQLite["SQLite Database (History, Signatures, Checkpoints, Bandit Priors)"]
         Checkpoints --> SQLite
+        Core --> Bandit["Thompson Sampling Bandit (Bayesian RL Defense Learning)"]
+        Bandit --> SQLite
         Core --> MCPServer["Model Context Protocol (MCP) Server for AI Agents"]
     end
 ```
@@ -55,14 +58,21 @@ graph TD
 - **Unified `Response` Adaptor**: Every fetcher returns a consistent `Response` object with `.css()`, `.xpath()`, `.toMarkdown()`, `.extractMetadata()`, and `.json()`.
 - **Self-Healing DOM Fingerprints**: When website redesigns break CSS selectors, the `AdaptiveEngine` uses multi-anchor similarity algorithms (structural paths, tag hierarchies, text snippets, class frequencies) to automatically relocate the intended element.
 
-### 3. Scrapy-like Spider Framework & Checkpoints
+### 3. Unsupervised Repeating Entity Induction (`ClusterExtractor`)
+- **Zero-Selector Catalog Mining**: Automatically identifies repeating structural card patterns across the DOM tree and induces schema fields (title, price, badge, date, image URL, link) without writing manual CSS selectors.
+
+### 4. Bayesian Multi-Armed Bandit Reinforcement Learning
+- **Online Defense Prior Learning**: Uses Thompson sampling over conjugate Beta distributions to track domain anti-bot defenses over time. Automatically engages **Probe Bypass** for high-confidence targets, jumping directly to the winning tier and saving roundtrip latency.
+
+### 5. Scrapy-like Spider Framework & Checkpoints
 - **Concurrent Crawl Engine**: Async crawling loop with link frontier queues, URL deduplication, depth budgeting, and auto-throttling.
 - **Pause & Resume Checkpoints**: Saves crawl state to SQLite so large site crawls can be stopped and resumed seamlessly (`--resume`).
 
-### 4. Interactive REPL Shell (`scrapi shell`)
+### 6. Interactive REPL Shell (`scrapi shell`)
 - Test CSS selectors, XPath queries, and markdown extraction live in a Node.js REPL console.
 
-### 5. Built-in Model Context Protocol (MCP) Server (`scrapi mcp`)
+### 7. Built-in Model Context Protocol (MCP) Server (`scrapi mcp`)
+- Exposes 5 AI tools (`scrapi_fetch`, `scrapi_extract`, `scrapi_adaptive_query`, `scrapi_crawl`, `scrapi_entities`) over JSON-RPC stdio for AI coding assistants like Claude, Cursor, and Antigravity.
 - Exposes 5 AI tools (`scrapi_fetch`, `scrapi_extract`, `scrapi_adaptive_query`, `scrapi_crawl`, `scrapi_entities`) over JSON-RPC stdio for AI coding assistants like Claude, Cursor, and Antigravity.
 
 ---

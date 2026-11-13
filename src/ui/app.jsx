@@ -226,8 +226,24 @@ function App() {
       }
     };
 
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setShowHelpModal(false);
+        setShowMcpModal(false);
+        setShowExportMenu(false);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setShowHelpModal(prev => !prev);
+      }
+    };
+
     window.addEventListener('message', handleIframeMessage);
-    return () => window.removeEventListener('message', handleIframeMessage);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('message', handleIframeMessage);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   // Spider status polling
@@ -795,10 +811,11 @@ function App() {
           <button
             onClick={() => setShowHelpModal(true)}
             class="btn-lux px-3 py-1.5 btn-ghost-lux rounded-xl text-xs font-semibold flex items-center space-x-1.5"
-            title="View Console Shortcuts & Navigation"
+            title="View Console Shortcuts & Navigation (Cmd/Ctrl + K)"
           >
             <span>⌨️</span>
             <span class="hidden md:inline">Shortcuts</span>
+            <span class="hidden lg:inline text-[9px] font-mono px-1 py-0.5 rounded bg-white/10 text-slate-400">⌘K</span>
           </button>
 
           {/* MCP AI Connect Button */}
@@ -2319,6 +2336,20 @@ function App() {
 
             <div class="space-y-3 text-xs">
               <div class="grid grid-cols-2 gap-2 text-slate-300">
+                <div class="p-3 bg-dark-950 rounded-xl border border-white/5 space-y-1">
+                  <div class="font-mono text-brand-300 font-bold flex justify-between items-center">
+                    <span>Cmd / Ctrl + K</span>
+                    <span class="text-[9px] bg-brand-500/20 text-brand-300 px-1.5 py-0.5 rounded">Global</span>
+                  </div>
+                  <div class="text-[11px] text-slate-400">Toggle this Shortcuts & Reference modal</div>
+                </div>
+                <div class="p-3 bg-dark-950 rounded-xl border border-white/5 space-y-1">
+                  <div class="font-mono text-slate-300 font-bold flex justify-between items-center">
+                    <span>Escape</span>
+                    <span class="text-[9px] bg-white/10 text-slate-300 px-1.5 py-0.5 rounded">Global</span>
+                  </div>
+                  <div class="text-[11px] text-slate-400">Close open dialogs, menus, and modals</div>
+                </div>
                 <div class="p-3 bg-dark-950 rounded-xl border border-white/5 space-y-1">
                   <div class="font-mono text-brand-300 font-bold">Click Element</div>
                   <div class="text-[11px] text-slate-400">Capture 64-bit SimHash DOM fingerprint in Target Preview</div>
