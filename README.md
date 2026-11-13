@@ -63,7 +63,7 @@ graph TD
 - Test CSS selectors, XPath queries, and markdown extraction live in a Node.js REPL console.
 
 ### 5. Built-in Model Context Protocol (MCP) Server (`scrapi mcp`)
-- Exposes tools (`scrapi_fetch`, `scrapi_extract`, `scrapi_adaptive_query`, `scrapi_crawl`) over JSON-RPC stdio for AI coding assistants like Claude, Cursor, and Antigravity.
+- Exposes 5 AI tools (`scrapi_fetch`, `scrapi_extract`, `scrapi_adaptive_query`, `scrapi_crawl`, `scrapi_entities`) over JSON-RPC stdio for AI coding assistants like Claude, Cursor, and Antigravity.
 
 ---
 
@@ -151,6 +151,10 @@ const links = response.xpath('//a').attribs('href');
 
 // Convert to GFM Markdown
 const { markdown, metadata } = response.toMarkdown();
+
+// Zero-selector entity & product card induction
+const entities = response.extractEntities({ limit: 20 });
+console.log(`Discovered ${entities.entities.length} items (${entities.detectedType})`);
 
 // Self-healing adaptive query
 const healed = response.adaptive({

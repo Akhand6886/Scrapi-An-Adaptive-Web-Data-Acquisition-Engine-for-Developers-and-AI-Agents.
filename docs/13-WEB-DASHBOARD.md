@@ -77,23 +77,31 @@ graph TD
 |---|---|---|
 | `POST` | `/api/scrape` | Executes a single-page scrape and saves results to SQLite and disk. |
 | `GET` | `/api/scrapes` | Returns a list of past scrapes with optional `?category=` filter. |
-| `GET` | `/api/scrapes/:id` | Returns full details and Markdown text of a specific scrape record. |
+| `DELETE` | `/api/scrapes/:id` | Deletes a scrape record from SQLite by ID. |
+| `GET` | `/api/preview` | Generates a quick markdown and metadata preview of an extracted URL. |
 | `GET` | `/api/proxy` | Proxies a target web page, rewriting links and injecting `picker.js`. |
 | `GET` | `/api/profiles` | Returns all saved visual selector profiles from SQLite. |
 | `POST` | `/api/profiles` | Saves a new selector profile (`{ name, url_pattern, selectors }`). |
-| `DELETE` | `/api/profiles/:id` | Deletes a selector profile. |
-| `POST` | `/api/spider/start` | Launches a background site crawl. |
-| `GET` | `/api/spider/status` | Returns active spider statistics, queued counts, and recent logs. |
+| `DELETE` | `/api/profiles/:id` | Deletes a selector profile by ID. |
+| `POST` | `/api/entities` | Mines repeating card and catalog entities (products, news, cards) without selectors. |
+| `POST` | `/api/spider` | Launches a background site crawl (supports pause/resume checkpoints). |
+| `GET` | `/api/spider` | Returns active spider statistics, queued counts, and recent logs. |
 | `POST` | `/api/spider/pause` | Pauses active spider and writes an SQLite checkpoint. |
-| `POST` | `/api/spider/stop` | Terminates active spider crawl. |
+| `POST` | `/api/spider/cancel` | Terminates active spider crawl. |
+| `GET` | `/api/spider/checkpoints` | Lists saved spider crawl checkpoints for `--resume`. |
+| `DELETE` | `/api/spider/checkpoints/:jobId` | Deletes a spider checkpoint by job ID. |
 | `POST` | `/api/topic/discover` | Discovers topic and category links on a target website. |
 | `POST` | `/api/topic/crawl` | Launches an exhaustive topic crawl using `TopicCrawler`. |
 | `GET` | `/api/topic/status` | Polls live topic crawl statistics, queues, and date coverage. |
 | `POST` | `/api/topic/pause` | Pauses active topic crawl and preserves checkpoint. |
 | `POST` | `/api/topic/cancel` | Cancels active topic crawl. |
 | `GET` | `/api/fingerprints` | Lists all saved self-healing element fingerprints. |
-| `GET` | `/api/bandit/priors` | Inspects Bayesian Bandit domain defense distributions. |
-| `GET` | `/api/stats` | Returns system health, database record counts, and cache statistics. |
+| `DELETE` | `/api/fingerprints/:id` | Deletes an element fingerprint by ID. |
+| `GET` | `/api/bandit` | Inspects Bayesian Bandit domain defense distributions and probe bypass states. |
+| `POST` | `/api/query` | Evaluates live CSS, XPath, or Regex queries against a target URL. |
+| `GET` | `/api/export` | Streams database export in JSONL, CSV, or JSON format. |
+| `GET` | `/api/mcp/info` | Returns Model Context Protocol server status, tool signatures, and Claude config. |
+| `POST` | `/api/kill` | Safely halts the local Express server process. |
 
 ---
 
@@ -108,4 +116,4 @@ This executes:
 ```bash
 esbuild src/ui/app.jsx --bundle --outfile=src/ui/app.js --loader:.js=jsx --jsx-factory=React.createElement --jsx-fragment=React.Fragment --minify
 ```
-Compilation takes $\sim 15\text{ms}$ and produces a compact single-file bundle ($\sim 66\text{KB}$).
+Compilation takes $\sim 15\text{ms}$ and produces a compact single-file bundle ($\sim 78\text{KB}$).
