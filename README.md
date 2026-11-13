@@ -130,7 +130,26 @@ node src/cli.js topic https://example.com "Analysis" --resume example.com-analys
 node src/cli.js crawl https://example.com -s "div.post-card a" --category blog
 ```
 
-### 7. Web Dashboard UI
+### 7. Zero-Selector Entity Mining
+```bash
+# Automatically extract products, prices, and catalogs without writing selectors
+node src/cli.js entities https://store.example.com/products --limit 25
+```
+
+### 8. Inspect Multi-Armed Bandit RL Priors
+```bash
+# Inspect learned defense distributions and probe bypass statuses
+node src/cli.js bandit
+```
+
+### 9. Bulk Dataset Export
+```bash
+# Export all scrapes from SQLite to JSON, JSONL, or CSV
+node src/cli.js export --format jsonl --dest ./dataset.jsonl
+node src/cli.js export --format csv --dest ./dataset.csv --category news
+```
+
+### 10. Web Dashboard UI
 ```bash
 node src/cli.js serve --port 3000
 ```
