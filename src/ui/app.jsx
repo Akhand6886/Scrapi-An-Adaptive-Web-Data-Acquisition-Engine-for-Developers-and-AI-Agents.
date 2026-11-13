@@ -39,10 +39,11 @@ function App() {
   const [profileName, setProfileName] = useState('');
   const [includeImages, setIncludeImages] = useState(false);
   const [downloadMedia, setDownloadMedia] = useState(false);
+  const [noMeta, setNoMeta] = useState(false);
   const [renderMode, setRenderMode] = useState('auto'); // 'auto' | 'static' | 'dynamic' | 'stealth'
   const [lastDecision, setLastDecision] = useState(null);
 
-  // Console Mode ('single' | 'batch' | 'spider')
+  // Console Mode ('single' | 'topic' | 'batch' | 'spider')
   const [consoleMode, setConsoleMode] = useState('single');
 
   // Spider State & Checkpoints
@@ -55,7 +56,6 @@ function App() {
   const [spiderConcurrency, setSpiderConcurrency] = useState(2);
   const [spiderDelay, setSpiderDelay] = useState(1500);
   const [checkpoints, setCheckpoints] = useState([]);
-  const [selectedCheckpoint, setSelectedCheckpoint] = useState('');
 
   // Batch Scraping State
   const [discoveredUrls, setDiscoveredUrls] = useState([]);
@@ -65,7 +65,6 @@ function App() {
   const [batchDelay, setBatchDelay] = useState(1500);
   const [discoveredCategories, setDiscoveredCategories] = useState([]);
   const [discoveringCategories, setDiscoveringCategories] = useState(false);
-  const [syncingCategories, setSyncingCategories] = useState(false);
   const [autoDetecting, setAutoDetecting] = useState(false);
 
   // Exhaustive Topic Crawl State
@@ -79,7 +78,7 @@ function App() {
   const [topicDelay, setTopicDelay] = useState(1000);
   const [topicSitemap, setTopicSitemap] = useState(true);
 
-  // Active Tab ('iframe' | 'markdown' | 'query' | 'adaptive')
+  // Active Tab ('iframe' | 'markdown' | 'query' | 'adaptive' | 'entities')
   const [activeTab, setActiveTab] = useState('iframe');
   const [iframeUrl, setIframeUrl] = useState('');
   const [markdownOutput, setMarkdownOutput] = useState('');
@@ -109,6 +108,8 @@ function App() {
 
   // Export State
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [copiedMarkdown, setCopiedMarkdown] = useState(false);
 
   // Loaded data lists
   const [profiles, setProfiles] = useState([]);
@@ -118,7 +119,7 @@ function App() {
 
   const showToast = (text, type = 'info') => {
     setStatusMsg({ text, type });
-    setTimeout(() => setStatusMsg({ text: '', type: '' }), 4000);
+    setTimeout(() => setStatusMsg({ text: '', type: '' }), 4500);
   };
 
   // Load initial data
@@ -149,7 +150,7 @@ function App() {
   };
 
   const handleMineEntities = async () => {
-    if (!targetUrl) {
+    if (!url) {
       showToast('Please enter a target URL first', 'error');
       return;
     }
@@ -158,7 +159,7 @@ function App() {
       const data = await safeFetchJson('/api/entities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: targetUrl, fetcher: activeFetcher, limit: 50 })
+        body: JSON.stringify({ url, fetcher: renderMode, limit: 50 })
       });
       setEntitiesData(data);
       const bStats = await safeFetchJson('/api/bandit');
@@ -334,7 +335,7 @@ function App() {
 
     try {
       const targetUrl = resumeJobId ? (checkpoints.find(c => c.job_id === resumeJobId)?.seed_url || url) : url;
-      const res = await safeFetchJson('/api/spider', {
+      await safeFetchJson('/api/spider', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -694,10 +695,46 @@ function App() {
     }
   };
 
+  const handleDeleteProfile = async (e, id, name) => {
+    e.stopPropagation();
+    try {
+      await safeFetchJson(`/api/profiles/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      showToast(`Profile "${name}" deleted`, 'info');
+      loadData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleDeleteScrape = async (e, id) => {
+    e.stopPropagation();
+    try {
+      await safeFetchJson(`/api/scrapes/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      showToast(`Scrape #${id} deleted`, 'info');
+      loadData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
   const handleCopyMarkdown = () => {
     if (!markdownOutput) return;
     navigator.clipboard.writeText(markdownOutput);
+    setCopiedMarkdown(true);
+    setTimeout(() => setCopiedMarkdown(false), 2000);
     showToast('Markdown copied to clipboard!', 'success');
+  };
+
+  const handleDownloadMarkdown = () => {
+    if (!markdownOutput) return;
+    const blob = new Blob([markdownOutput], { type: 'text/markdown' });
+    const u = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = u;
+    a.download = `scrapi-extract-${Date.now()}.md`;
+    a.click();
+    URL.revokeObjectURL(u);
+    showToast('Markdown downloaded as .md file!', 'success');
   };
 
   const handleKillServer = async () => {
@@ -710,80 +747,110 @@ function App() {
     try { await fetch('/api/kill', { method: 'POST' }); } catch (e) {}
     setTimeout(() => {
       document.body.innerHTML = `
-        <div class="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-white font-sans">
-          <span class="text-6xl mb-4">🛑</span>
-          <h1 class="text-3xl font-bold text-red-500 mb-2">Scrapi Server Terminated</h1>
-          <p class="text-slate-400">The local server process was halted safely.</p>
+        <div class="h-screen w-screen flex flex-col items-center justify-center ambient-bg text-white font-sans p-6 text-center">
+          <div class="w-20 h-20 rounded-3xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-4xl mb-6 shadow-2xl shadow-red-500/20 animate-pulse">
+            🛑
+          </div>
+          <h1 class="text-3xl font-display font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 via-rose-300 to-amber-300 mb-3">
+            Scrapi Server Stopped
+          </h1>
+          <p class="text-slate-400 max-w-md text-sm leading-relaxed">
+            The local Node.js server process was safely terminated. You can restart it from terminal anytime using <code class="px-2 py-1 bg-dark-950 rounded border border-white/10 font-mono text-xs text-rose-300">node src/cli.js serve</code>.
+          </p>
         </div>
       `;
-    }, 1000);
+    }, 800);
   };
 
   return (
-    <div class="flex-1 flex flex-col h-full overflow-hidden bg-slate-950 text-slate-100 font-sans">
+    <div class="flex-1 flex flex-col h-full overflow-hidden text-slate-100 font-sans selection:bg-brand-500/30 selection:text-white">
       {/* Top Header */}
-      <header class="glass h-16 flex items-center justify-between px-6 border-b border-white/5 shrink-0 z-20">
-        <div class="flex items-center space-x-3">
-          <span class="text-2xl animate-pulse-slow">🕷️</span>
+      <header class="glass h-16 flex items-center justify-between px-6 border-b border-white/[0.08] shrink-0 z-30 shadow-lg">
+        <div class="flex items-center space-x-3.5">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 via-brand-500 to-teal-400 p-[1px] shadow-lg shadow-brand-500/20">
+            <div class="w-full h-full bg-dark-950 rounded-[11px] flex items-center justify-center text-xl">
+              <span class="animate-pulse-slow">🕷️</span>
+            </div>
+          </div>
           <div>
-            <div class="flex items-center space-x-2">
-              <span class="font-bold text-lg tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-teal-300 to-emerald-400">
+            <div class="flex items-center space-x-2.5">
+              <span class="font-display font-extrabold text-xl tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-300 to-emerald-400 drop-shadow-sm">
                 SCRAPI
               </span>
-              <span class="px-2 py-0.5 bg-blue-500/10 text-blue-400 text-[10px] rounded-full border border-blue-500/20 font-bold">
+              <span class="px-2 py-0.5 bg-brand-500/10 text-brand-400 text-[10px] rounded-full border border-brand-500/30 font-bold font-mono tracking-wide shadow-sm">
                 v2.0 SCRAPLING
               </span>
+              <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping mr-1.5"></span>
+                ONLINE
+              </span>
             </div>
-            <div class="text-[10px] text-slate-400">Multi-Tier Evasion • Adaptive Self-Healing • Spider Checkpoints</div>
+            <div class="text-[11px] text-slate-400 hidden sm:block font-medium">Multi-Tier Evasion • Adaptive Self-Healing • Dual-Frontier Spider</div>
           </div>
         </div>
 
         <div class="flex items-center space-x-3">
+          {/* Shortcuts & Guide Button */}
+          <button
+            onClick={() => setShowHelpModal(true)}
+            class="btn-lux px-3 py-1.5 btn-ghost-lux rounded-xl text-xs font-semibold flex items-center space-x-1.5"
+            title="View Console Shortcuts & Navigation"
+          >
+            <span>⌨️</span>
+            <span class="hidden md:inline">Shortcuts</span>
+          </button>
+
           {/* MCP AI Connect Button */}
           <button
             onClick={() => setShowMcpModal(true)}
-            class="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-all active:scale-95 shadow-md shadow-indigo-600/10"
+            class="btn-lux px-3.5 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-200 border border-indigo-500/40 rounded-xl text-xs font-semibold flex items-center space-x-2 shadow-lg shadow-indigo-600/15"
             title="Model Context Protocol for Claude / Cursor AI Integration"
           >
             <span>🤖</span>
             <span>MCP Connect</span>
-            <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+            <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
           </button>
 
           {/* Export Scrapes Dropdown */}
           <div class="relative">
             <button
               onClick={() => setShowExportMenu(!showExportMenu)}
-              class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 rounded-lg text-xs font-semibold flex items-center space-x-1 transition-all active:scale-95"
+              class="btn-lux px-3.5 py-1.5 btn-ghost-lux rounded-xl text-xs font-semibold flex items-center space-x-1.5"
             >
               <span>📥 Export</span>
-              <span class="text-[10px]">▼</span>
+              <span class="text-[9px] text-slate-400">▼</span>
             </button>
             {showExportMenu && (
-              <div class="absolute right-0 mt-2 w-44 bg-slate-900 border border-white/10 rounded-xl shadow-2xl py-1 z-50 animate-fade-in">
+              <div class="absolute right-0 mt-2 w-48 glass-card rounded-2xl shadow-2xl py-1.5 z-50 animate-fade-in border border-white/10">
+                <div class="px-3 py-1 text-[10px] uppercase font-bold tracking-wider text-slate-400 border-b border-white/5 mb-1">
+                  Download Database
+                </div>
                 <a
                   href="/api/export?format=jsonl"
                   download
                   onClick={() => setShowExportMenu(false)}
-                  class="block px-3 py-2 text-xs text-slate-300 hover:bg-blue-600/20 hover:text-blue-300 transition-colors"
+                  class="flex items-center space-x-2 px-3 py-2 text-xs text-slate-300 hover:bg-brand-600/20 hover:text-brand-300 transition-colors"
                 >
-                  📄 JSON Lines (.jsonl)
+                  <span>📄</span>
+                  <span>JSON Lines (.jsonl)</span>
                 </a>
                 <a
                   href="/api/export?format=csv"
                   download
                   onClick={() => setShowExportMenu(false)}
-                  class="block px-3 py-2 text-xs text-slate-300 hover:bg-blue-600/20 hover:text-blue-300 transition-colors"
+                  class="flex items-center space-x-2 px-3 py-2 text-xs text-slate-300 hover:bg-brand-600/20 hover:text-brand-300 transition-colors"
                 >
-                  📊 Spreadsheet (.csv)
+                  <span>📊</span>
+                  <span>Spreadsheet (.csv)</span>
                 </a>
                 <a
                   href="/api/export?format=json"
                   download
                   onClick={() => setShowExportMenu(false)}
-                  class="block px-3 py-2 text-xs text-slate-300 hover:bg-blue-600/20 hover:text-blue-300 transition-colors"
+                  class="flex items-center space-x-2 px-3 py-2 text-xs text-slate-300 hover:bg-brand-600/20 hover:text-brand-300 transition-colors"
                 >
-                  🗄️ Raw JSON (.json)
+                  <span>🗄️</span>
+                  <span>Raw JSON (.json)</span>
                 </a>
               </div>
             )}
@@ -792,11 +859,15 @@ function App() {
           {/* Kill Program Button */}
           <button 
             onClick={handleKillServer}
-            class={`px-3 py-1.5 text-white rounded-lg text-xs font-semibold transition-all border flex items-center shadow-lg active:scale-95 ${confirmKill ? 'bg-orange-600 hover:bg-orange-500 border-orange-500/50' : 'bg-red-600/80 hover:bg-red-600 border-red-500/30'}`}
+            class={`btn-lux px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              confirmKill 
+                ? 'btn-amber-gradient font-bold' 
+                : 'btn-danger-gradient'
+            }`}
             title="Terminate local backend server"
           >
             <span>🛑</span>
-            <span class="ml-1.5">{confirmKill ? 'Confirm' : 'Shutdown'}</span>
+            <span class="ml-1.5">{confirmKill ? 'Confirm Shutdown' : 'Shutdown'}</span>
           </button>
         </div>
       </header>
@@ -804,142 +875,196 @@ function App() {
       {/* Main Workspace Layout */}
       <main class="flex-1 flex overflow-hidden">
         {/* Left Control Sidebar */}
-        <section class="w-[390px] flex flex-col border-r border-white/5 glass overflow-y-auto custom-scrollbar p-5 space-y-5 shrink-0">
+        <section class="w-[420px] flex flex-col border-r border-white/[0.08] glass overflow-y-auto custom-scrollbar p-5 space-y-5 shrink-0 z-10">
           
           {/* Console Mode Switcher */}
-          <div class="space-y-1.5 shrink-0">
-            <label class="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Console Mode</label>
-            <div class="grid grid-cols-4 gap-1 bg-slate-900/80 rounded-xl p-1 border border-white/10">
+          <div class="space-y-2 shrink-0">
+            <div class="flex justify-between items-center px-1">
+              <label class="text-[11px] text-slate-400 uppercase tracking-wider font-display font-bold">Console Mode</label>
+              <span class="text-[10px] text-brand-400 font-mono">Workflow Target</span>
+            </div>
+            <div class="grid grid-cols-4 gap-1.5 bg-dark-950/90 rounded-2xl p-1.5 border border-white/[0.08] shadow-inner">
               <button
                 onClick={() => setConsoleMode('single')}
-                class={`py-1.5 text-[10px] font-bold rounded-lg transition-all ${consoleMode === 'single' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+                class={`btn-lux py-2 text-xs font-bold rounded-xl transition-all ${
+                  consoleMode === 'single' 
+                    ? 'btn-primary-gradient shadow-md' 
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                }`}
               >
-                🕷️ Single
+                <span>🕷️ Single</span>
               </button>
               <button
                 onClick={() => setConsoleMode('topic')}
-                class={`py-1.5 text-[10px] font-bold rounded-lg transition-all ${consoleMode === 'topic' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+                class={`btn-lux py-2 text-xs font-bold rounded-xl transition-all ${
+                  consoleMode === 'topic' 
+                    ? 'btn-emerald-gradient shadow-md' 
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                }`}
               >
-                🏷️ Topic
+                <span>🏷️ Topic</span>
               </button>
               <button
                 onClick={() => setConsoleMode('batch')}
-                class={`py-1.5 text-[10px] font-bold rounded-lg transition-all ${consoleMode === 'batch' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+                class={`btn-lux py-2 text-xs font-bold rounded-xl transition-all ${
+                  consoleMode === 'batch' 
+                    ? 'btn-primary-gradient shadow-md' 
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                }`}
               >
-                ⚡ Batch
+                <span>⚡ Batch</span>
               </button>
               <button
                 onClick={() => setConsoleMode('spider')}
-                class={`py-1.5 text-[10px] font-bold rounded-lg transition-all ${consoleMode === 'spider' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+                class={`btn-lux py-2 text-xs font-bold rounded-xl transition-all ${
+                  consoleMode === 'spider' 
+                    ? 'btn-purple-gradient shadow-md' 
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                }`}
               >
-                🕸️ Spider
+                <span>🕸️ Spider</span>
               </button>
             </div>
           </div>
 
           {/* Progressive Multi-Tier Fetcher Selector */}
-          <div class="space-y-1.5 bg-slate-900/60 p-3 rounded-xl border border-white/5">
+          <div class="space-y-2.5 glass-card p-4 rounded-2xl border border-white/[0.08]">
             <div class="flex justify-between items-center">
-              <label class="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Progressive Fetcher Tier</label>
-              <span class={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                renderMode === 'auto' ? 'text-amber-400 bg-amber-500/10 border border-amber-500/30' :
-                renderMode === 'static' ? 'text-blue-400 bg-blue-500/10' :
-                renderMode === 'dynamic' ? 'text-teal-400 bg-teal-500/10' :
-                'text-purple-400 bg-purple-500/10 border border-purple-500/30'
+              <label class="text-[11px] text-slate-300 uppercase tracking-wider font-display font-bold flex items-center space-x-1.5">
+                <span>⚡</span>
+                <span>Fetcher Tier</span>
+              </label>
+              <span class={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono border ${
+                renderMode === 'auto' ? 'text-amber-300 bg-amber-500/15 border-amber-500/40 shadow-sm shadow-amber-500/20' :
+                renderMode === 'static' ? 'text-blue-300 bg-blue-500/15 border-blue-500/40 shadow-sm shadow-blue-500/20' :
+                renderMode === 'dynamic' ? 'text-teal-300 bg-teal-500/15 border-teal-500/40 shadow-sm shadow-teal-500/20' :
+                'text-purple-300 bg-purple-500/15 border-purple-500/40 shadow-sm shadow-purple-500/20'
               }`}>
-                {renderMode === 'auto' ? '🤖 DECISION TREE (AUTO)' : renderMode === 'stealth' ? '🛡️ ANTI-BOT BYPASS' : renderMode === 'dynamic' ? '🌐 PLAYWRIGHT SPA' : '⚡ 304 CACHED'}
+                {renderMode === 'auto' ? '🤖 DECISION TREE' : renderMode === 'stealth' ? '🛡️ ANTI-BOT BYPASS' : renderMode === 'dynamic' ? '🌐 PLAYWRIGHT SPA' : '⚡ 304 CACHED'}
               </span>
             </div>
             
-            <div class="grid grid-cols-4 gap-1 pt-1">
+            <div class="grid grid-cols-4 gap-1.5">
               <button
                 onClick={() => setRenderMode('auto')}
-                class={`py-1.5 px-1.5 text-[10px] font-semibold rounded-lg transition-all border ${renderMode === 'auto' ? 'bg-amber-600 text-white border-amber-400 shadow-md' : 'bg-slate-950/60 border-white/5 text-slate-400 hover:text-slate-200'}`}
+                class={`btn-lux py-2 px-1 text-xs font-bold rounded-xl border transition-all ${
+                  renderMode === 'auto' 
+                    ? 'btn-amber-gradient shadow-md' 
+                    : 'bg-dark-950/80 border-white/5 text-slate-400 hover:text-white hover:border-white/10'
+                }`}
                 title="AI Decision Tree: Auto-routes in <20µs to Static, Dynamic, or Stealth based on DOM/HTTP signals"
               >
-                🤖 Auto
+                <span>🤖 Auto</span>
               </button>
               <button
                 onClick={() => setRenderMode('static')}
-                class={`py-1.5 px-1.5 text-[10px] font-semibold rounded-lg transition-all border ${renderMode === 'static' ? 'bg-blue-600 text-white border-blue-400 shadow-md' : 'bg-slate-950/60 border-white/5 text-slate-400 hover:text-slate-200'}`}
+                class={`btn-lux py-2 px-1 text-xs font-bold rounded-xl border transition-all ${
+                  renderMode === 'static' 
+                    ? 'btn-primary-gradient shadow-md' 
+                    : 'bg-dark-950/80 border-white/5 text-slate-400 hover:text-white hover:border-white/10'
+                }`}
                 title="Ultra-fast connection pooling, TLS headers, and HTTP 304 caching"
               >
-                ⚡ Static
+                <span>⚡ Static</span>
               </button>
               <button
                 onClick={() => setRenderMode('dynamic')}
-                class={`py-1.5 px-1.5 text-[10px] font-semibold rounded-lg transition-all border ${renderMode === 'dynamic' ? 'bg-teal-600 text-white border-teal-400 shadow-md' : 'bg-slate-950/60 border-white/5 text-slate-400 hover:text-slate-200'}`}
+                class={`btn-lux py-2 px-1 text-xs font-bold rounded-xl border transition-all ${
+                  renderMode === 'dynamic' 
+                    ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white border-teal-400 shadow-md shadow-teal-600/30' 
+                    : 'bg-dark-950/80 border-white/5 text-slate-400 hover:text-white hover:border-white/10'
+                }`}
                 title="Playwright headless browser for dynamic JavaScript single-page apps"
               >
-                🌐 Dynamic
+                <span>🌐 Dynamic</span>
               </button>
               <button
                 onClick={() => setRenderMode('stealth')}
-                class={`py-1.5 px-1.5 text-[10px] font-semibold rounded-lg transition-all border ${renderMode === 'stealth' ? 'bg-purple-600 text-white border-purple-400 shadow-md' : 'bg-slate-950/60 border-white/5 text-slate-400 hover:text-slate-200'}`}
+                class={`btn-lux py-2 px-1 text-xs font-bold rounded-xl border transition-all ${
+                  renderMode === 'stealth' 
+                    ? 'btn-purple-gradient shadow-md' 
+                    : 'bg-dark-950/80 border-white/5 text-slate-400 hover:text-white hover:border-white/10'
+                }`}
                 title="Anti-bot evasion: Cloudflare Turnstile bypass, navigator mask, canvas noise"
               >
-                🛡️ Stealth
+                <span>🛡️ Stealth</span>
               </button>
             </div>
-            <div class="text-[9px] text-slate-400 pt-1 leading-tight">
-              {renderMode === 'auto' && 'Autonomous CART Decision Tree. Analyzes HTTP status, Turnstile tokens & SPA root in <20µs.'}
-              {renderMode === 'static' && 'Ultra-fast HTTP client with connection keep-alive and ETag caching.'}
-              {renderMode === 'dynamic' && 'Full Chromium rendering for React, Next.js, and client-side SPAs.'}
-              {renderMode === 'stealth' && 'Anti-detection engine that solves Cloudflare Turnstile challenges automatically.'}
+            <div class="text-[11px] text-slate-400 pt-0.5 leading-relaxed bg-dark-950/40 p-2.5 rounded-xl border border-white/[0.04]">
+              {renderMode === 'auto' && 'Autonomous CART Decision Tree. Evaluates HTTP headers, Turnstile challenges & SPA markers in <20µs.'}
+              {renderMode === 'static' && 'High-speed HTTP Keep-Alive client with automatic Brotli/Gzip decompression and ETag 304 caching.'}
+              {renderMode === 'dynamic' && 'Chromium headless browser via Playwright for JavaScript SPAs (React, Vue, Next.js).'}
+              {renderMode === 'stealth' && 'Anti-bot evasion suite: strips webdriver flags, spoofs WebGL noise, solves Cloudflare Turnstile.'}
             </div>
           </div>
 
           {/* Mode 1: Single Page Scrape */}
           {consoleMode === 'single' && (
             <div class="space-y-4 animate-fade-in">
-              <div class="space-y-2">
-                <label class="text-xs text-slate-400 font-medium">Target URL</label>
+              <div class="space-y-1.5">
+                <div class="flex justify-between items-center">
+                  <label class="text-xs text-slate-300 font-semibold flex items-center space-x-1.5">
+                    <span>🎯</span>
+                    <span>Target URL</span>
+                  </label>
+                  <div class="flex items-center space-x-2 text-[10px]">
+                    <button onClick={() => setUrl('https://news.ycombinator.com')} class="text-brand-400 hover:underline">HN</button>
+                    <span class="text-slate-600">•</span>
+                    <button onClick={() => setUrl('https://quotes.toscrape.com')} class="text-brand-400 hover:underline">Quotes</button>
+                  </div>
+                </div>
                 <input 
                   type="url" 
                   placeholder="https://example.com/article" 
                   value={url} 
                   onChange={e => setUrl(e.target.value)}
-                  class="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+                  class="glass-input w-full px-3.5 py-2.5 rounded-xl text-sm text-slate-100 placeholder-slate-500 font-mono focus:outline-none"
                 />
               </div>
 
-              <div class="space-y-2">
-                <label class="text-xs text-slate-400 font-medium">Category Tag</label>
+              <div class="space-y-1.5">
+                <label class="text-xs text-slate-300 font-semibold flex items-center space-x-1.5">
+                  <span>🏷️</span>
+                  <span>Category Tag</span>
+                </label>
                 <input 
                   type="text" 
-                  placeholder="e.g. articles, tech (optional)" 
+                  placeholder="e.g. articles, tech, research (optional)" 
                   value={category} 
                   onChange={e => setCategory(e.target.value)}
-                  class="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+                  class="glass-input w-full px-3.5 py-2.5 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none"
                 />
               </div>
 
-              <div class="flex space-x-2">
+              <div class="grid grid-cols-2 gap-2.5 pt-1">
                 <button 
                   onClick={handleLoadProxy} 
                   disabled={loading}
-                  class="flex-1 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center justify-center shadow-lg shadow-blue-600/20"
+                  class="btn-lux btn-primary-gradient py-2.5 px-3 text-xs font-bold rounded-xl space-x-2"
                 >
-                  <span class="mr-1.5">🌐</span>
-                  Proxy Page
+                  <span>🌐</span>
+                  <span>Proxy Target</span>
                 </button>
                 <button 
                   onClick={handleScrape} 
                   disabled={loading}
-                  class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center justify-center shadow-lg shadow-emerald-600/20"
+                  class="btn-lux btn-emerald-gradient py-2.5 px-3 text-xs font-bold rounded-xl space-x-2"
                 >
-                  <span class="mr-1.5">⚡</span>
-                  Scrape Now
+                  <span>⚡</span>
+                  <span>Scrape Now</span>
                 </button>
               </div>
 
               {/* Selector & Fingerprint Section */}
-              <div class="space-y-3 pt-3 border-t border-white/5">
+              <div class="space-y-3 pt-3 border-t border-white/[0.08]">
                 <div class="flex justify-between items-center">
-                  <label class="text-xs text-slate-400 font-medium">CSS Selector</label>
+                  <label class="text-xs text-slate-300 font-semibold flex items-center space-x-1.5">
+                    <span>🔍</span>
+                    <span>CSS Selector</span>
+                  </label>
                   {activeSignature && (
-                    <span class="text-[9px] text-teal-400 font-bold uppercase bg-teal-500/10 px-1.5 py-0.5 rounded border border-teal-500/20">
-                      Fingerprint Ready
+                    <span class="text-[9px] text-teal-300 font-bold uppercase bg-teal-500/15 px-2 py-0.5 rounded-full border border-teal-500/30">
+                      Anchor Fingerprint Active
                     </span>
                   )}
                 </div>
@@ -949,11 +1074,11 @@ function App() {
                     placeholder="auto (smart content root)" 
                     value={selector} 
                     onChange={e => setSelector(e.target.value)}
-                    class="flex-1 px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-emerald-400 font-mono focus:outline-none focus:border-blue-500 transition-colors"
+                    class="glass-input flex-1 px-3 py-2 rounded-xl text-xs text-emerald-400 font-mono focus:outline-none"
                   />
                   <button 
                     onClick={() => { setSelector(''); setActiveSignature(null); }}
-                    class="px-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl border border-white/10 text-slate-400"
+                    class="btn-lux btn-ghost-lux px-3 rounded-xl text-slate-400 hover:text-white"
                     title="Clear Selector"
                   >
                     ✕
@@ -962,7 +1087,7 @@ function App() {
 
                 {/* Captured Fingerprint preview */}
                 {activeSignature && (
-                  <div class="p-2.5 bg-slate-900/90 border border-teal-500/30 rounded-xl space-y-1 text-[10px] font-mono">
+                  <div class="p-3 bg-dark-950/80 border border-teal-500/30 rounded-xl space-y-1.5 text-[10px] font-mono shadow-sm">
                     <div class="flex justify-between text-teal-300 font-bold">
                       <span>🎯 DOM Anchor</span>
                       <span>&lt;{activeSignature.tagName}&gt;</span>
@@ -978,59 +1103,59 @@ function App() {
                         setActiveTab('adaptive');
                         handleTestAdaptive(activeSignature);
                       }}
-                      class="w-full mt-1.5 py-1 bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 rounded-lg text-[10px] font-semibold transition-all"
+                      class="btn-lux w-full mt-1.5 py-1.5 bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/40 rounded-lg text-[10px] font-semibold"
                     >
                       Test Self-Healing in Studio →
                     </button>
                   </div>
                 )}
 
-                <div class="space-y-2">
-                  <label class="text-xs text-slate-400 font-medium">Save As Scraper Profile</label>
+                <div class="space-y-1.5">
+                  <label class="text-xs text-slate-300 font-semibold">Save Scraper Profile</label>
                   <div class="flex space-x-2">
                     <input 
                       type="text" 
-                      placeholder="Profile Name (e.g. HN-Articles)" 
+                      placeholder="Profile Name (e.g. Tech-Articles)" 
                       value={profileName} 
                       onChange={e => setProfileName(e.target.value)}
-                      class="flex-1 px-3 py-1.5 bg-slate-900 border border-white/10 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-500 transition-colors"
+                      class="glass-input flex-1 px-3 py-2 rounded-xl text-xs text-slate-200 focus:outline-none"
                     />
                     <button 
                       onClick={handleSaveProfile}
-                      class="px-3 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-xl text-xs font-bold transition-all active:scale-95"
+                      class="btn-lux btn-primary-gradient px-4 py-2 text-xs font-bold rounded-xl"
                     >
                       Save
                     </button>
                   </div>
                 </div>
 
-                <div class="flex items-center space-x-4 pt-1">
-                  <label class="flex items-center text-xs text-slate-400 cursor-pointer">
+                <div class="grid grid-cols-3 gap-2 pt-1 text-xs">
+                  <label class="flex items-center text-slate-300 cursor-pointer bg-dark-950/60 p-2 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
                     <input 
                       type="checkbox" 
                       checked={includeImages} 
                       onChange={e => setIncludeImages(e.target.checked)}
-                      class="rounded bg-slate-900 border-white/10 text-blue-500 mr-1.5"
+                      class="rounded bg-dark-900 border-white/20 text-brand-500 mr-2 accent-brand-500"
                     />
-                    Alt-Text
+                    <span>Alt-Text</span>
                   </label>
-                  <label class="flex items-center text-xs text-slate-400 cursor-pointer">
+                  <label class="flex items-center text-slate-300 cursor-pointer bg-dark-950/60 p-2 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
                     <input 
                       type="checkbox" 
                       checked={downloadMedia} 
                       onChange={e => setDownloadMedia(e.target.checked)}
-                      class="rounded bg-slate-900 border-white/10 text-blue-500 mr-1.5"
+                      class="rounded bg-dark-900 border-white/20 text-brand-500 mr-2 accent-brand-500"
                     />
-                    Save Media
+                    <span>Save Media</span>
                   </label>
-                  <label class="flex items-center text-xs text-slate-400 cursor-pointer">
+                  <label class="flex items-center text-slate-300 cursor-pointer bg-dark-950/60 p-2 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
                     <input 
                       type="checkbox" 
                       checked={noMeta} 
                       onChange={e => setNoMeta(e.target.checked)}
-                      class="rounded bg-slate-900 border-white/10 text-blue-500 mr-1.5"
+                      class="rounded bg-dark-900 border-white/20 text-brand-500 mr-2 accent-brand-500"
                     />
-                    Skip Meta
+                    <span>Skip Meta</span>
                   </label>
                 </div>
               </div>
@@ -1040,15 +1165,18 @@ function App() {
           {/* Mode Topic: Exhaustive Topic Crawl (Earliest ➔ Present) */}
           {consoleMode === 'topic' && (
             <div class="space-y-4 animate-fade-in">
-              <div class="space-y-2">
+              <div class="space-y-1.5">
                 <div class="flex justify-between items-center">
-                  <label class="text-xs text-slate-400 font-medium">Website URL</label>
+                  <label class="text-xs text-slate-300 font-semibold flex items-center space-x-1.5">
+                    <span>🌐</span>
+                    <span>Website URL</span>
+                  </label>
                   <button 
                     onClick={handleDiscoverTopics}
                     disabled={discoveringCategories || !url}
-                    class="text-[10px] text-emerald-400 hover:underline flex items-center space-x-1"
+                    class="btn-lux text-[10px] text-emerald-300 font-semibold hover:text-emerald-200 px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20"
                   >
-                    <span>{discoveringCategories ? 'Discovering...' : '🔍 Auto-Detect Categories'}</span>
+                    <span>{discoveringCategories ? 'Discovering...' : '🪄 Auto-Detect Categories'}</span>
                   </button>
                 </div>
                 <input 
@@ -1056,23 +1184,23 @@ function App() {
                   placeholder="https://example.com" 
                   value={url} 
                   onChange={e => setUrl(e.target.value)}
-                  class="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                  class="glass-input w-full px-3.5 py-2.5 rounded-xl text-sm text-slate-100 placeholder-slate-500 font-mono focus:outline-none"
                 />
               </div>
 
               {/* Discovered Topic Pills */}
               {discoveredCategories.length > 0 && (
-                <div class="space-y-1.5 bg-slate-900/60 p-2.5 rounded-xl border border-white/5">
-                  <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Discovered Site Categories:</span>
-                  <div class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto custom-scrollbar pt-1">
+                <div class="space-y-2 glass-card p-3 rounded-xl border border-white/[0.08]">
+                  <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-display">Discovered Site Categories:</span>
+                  <div class="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto custom-scrollbar pt-1">
                     {discoveredCategories.map((cat, i) => (
                       <button
                         key={i}
                         onClick={() => setTopicInput(cat.name)}
-                        class={`px-2 py-0.5 text-[10px] rounded-lg border transition-all ${
+                        class={`btn-lux px-2.5 py-1 text-[11px] rounded-lg border transition-all ${
                           topicInput.toLowerCase() === cat.name.toLowerCase()
-                            ? 'bg-emerald-600 text-white border-emerald-400 font-bold shadow'
-                            : 'bg-slate-950/80 text-slate-300 border-white/10 hover:border-emerald-500/50'
+                            ? 'btn-emerald-gradient text-white font-bold shadow'
+                            : 'bg-dark-950/80 text-slate-300 border-white/10 hover:border-emerald-500/40'
                         }`}
                       >
                         {cat.name}
@@ -1082,56 +1210,57 @@ function App() {
                 </div>
               )}
 
-              <div class="space-y-2">
-                <label class="text-xs text-slate-400 font-medium">Target Topic / Category</label>
+              <div class="space-y-1.5">
+                <label class="text-xs text-slate-300 font-semibold flex items-center space-x-1.5">
+                  <span>🏷️</span>
+                  <span>Target Topic / Category</span>
+                </label>
                 <input 
                   type="text" 
                   placeholder="e.g. Analysis, Engineering, AI, Markets" 
                   value={topicInput} 
                   onChange={e => setTopicInput(e.target.value)}
-                  class="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-sm text-emerald-300 font-semibold focus:outline-none focus:border-emerald-500"
+                  class="glass-input w-full px-3.5 py-2.5 rounded-xl text-sm text-emerald-300 font-semibold focus:outline-none"
                 />
               </div>
 
-              <div class="grid grid-cols-2 gap-2">
+              <div class="grid grid-cols-2 gap-2.5">
                 <div class="space-y-1">
-                  <label class="text-[10px] text-slate-400 font-medium">Concurrency</label>
+                  <label class="text-[11px] text-slate-400 font-medium">Concurrency</label>
                   <input 
                     type="number" 
                     value={topicConcurrency} 
                     onChange={e => setTopicConcurrency(e.target.value)}
-                    class="w-full px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-xl text-xs text-slate-200"
+                    class="glass-input w-full px-3 py-2 rounded-xl text-xs text-slate-200"
                   />
                 </div>
                 <div class="space-y-1">
-                  <label class="text-[10px] text-slate-400 font-medium">Delay (ms)</label>
+                  <label class="text-[11px] text-slate-400 font-medium">Delay (ms)</label>
                   <input 
                     type="number" 
                     value={topicDelay} 
                     onChange={e => setTopicDelay(e.target.value)}
-                    class="w-full px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-xl text-xs text-slate-200"
+                    class="glass-input w-full px-3 py-2 rounded-xl text-xs text-slate-200"
                   />
                 </div>
               </div>
 
-              <div class="flex items-center space-x-2 pt-1">
-                <label class="flex items-center text-xs text-slate-300 cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    checked={topicSitemap} 
-                    onChange={e => setTopicSitemap(e.target.checked)}
-                    class="rounded bg-slate-900 border-white/10 text-emerald-500 mr-2"
-                  />
-                  <span>Probe XML Sitemaps for Historical Archives</span>
-                </label>
-              </div>
+              <label class="flex items-center text-xs text-slate-300 cursor-pointer bg-dark-950/60 p-2.5 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
+                <input 
+                  type="checkbox" 
+                  checked={topicSitemap} 
+                  onChange={e => setTopicSitemap(e.target.checked)}
+                  class="rounded bg-dark-900 border-white/20 text-emerald-500 mr-2.5 accent-emerald-500"
+                />
+                <span>Probe XML Sitemaps for Historical Archives</span>
+              </label>
 
               {/* Topic Crawl Control Buttons */}
               <div class="space-y-2 pt-1">
                 {!topicActive ? (
                   <button 
                     onClick={() => handleStartTopicCrawl()} 
-                    class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-emerald-600/20 active:scale-95 flex items-center justify-center space-x-1.5"
+                    class="btn-lux btn-emerald-gradient w-full py-3 text-xs font-bold rounded-xl space-x-2"
                   >
                     <span>🚀</span>
                     <span>Start Exhaustive Topic Crawl</span>
@@ -1140,17 +1269,19 @@ function App() {
                   <div class="grid grid-cols-2 gap-2">
                     <button
                       onClick={handlePauseTopicCrawl}
-                      class="py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center justify-center shadow-lg"
+                      class="btn-lux btn-amber-gradient py-2.5 text-xs font-bold rounded-xl space-x-1.5"
                       title="Pause crawl and save checkpoint state"
                     >
-                      <span class="mr-1">⏸️</span> Pause & Save
+                      <span>⏸️</span>
+                      <span>Pause & Save</span>
                     </button>
                     <button
                       onClick={handleCancelTopicCrawl}
-                      class="py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center justify-center shadow-lg"
+                      class="btn-lux btn-danger-gradient py-2.5 text-xs font-bold rounded-xl space-x-1.5"
                       title="Stop crawl"
                     >
-                      <span class="mr-1">🛑</span> Stop
+                      <span>🛑</span>
+                      <span>Stop Crawl</span>
                     </button>
                   </div>
                 )}
@@ -1158,18 +1289,20 @@ function App() {
 
               {/* Live Topic Crawl Metrics & Dynamic Date Coverage Banner */}
               {(topicActive || topicLogs.length > 0) && (
-                <div class="space-y-3 bg-slate-900/90 border border-emerald-500/20 p-3.5 rounded-xl animate-fade-in">
+                <div class="space-y-3 glass-card border border-emerald-500/30 p-4 rounded-2xl animate-fade-in shadow-xl">
                   <div class="flex justify-between items-center">
-                    <span class="text-xs font-bold text-slate-200">Topic Crawl Progress</span>
-                    <span class={`text-[9px] font-bold px-2 py-0.5 rounded-full ${topicActive ? 'bg-emerald-500/20 text-emerald-300 animate-pulse' : 'bg-blue-500/20 text-blue-300'}`}>
+                    <span class="text-xs font-bold text-slate-200 font-display">Topic Crawl Progress</span>
+                    <span class={`text-[9px] font-bold px-2.5 py-0.5 rounded-full ${
+                      topicActive ? 'bg-emerald-500/20 text-emerald-300 animate-pulse border border-emerald-500/40' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                    }`}>
                       {topicActive ? 'CRAWLING' : 'FINISHED'}
                     </span>
                   </div>
 
                   {/* Dynamic Date Coverage Alert Banner */}
                   {topicDateCoverage.earliestDate && (
-                    <div class="p-2 bg-emerald-950/40 border border-emerald-500/30 rounded-lg text-[10px] space-y-1">
-                      <div class="font-bold text-emerald-300 flex items-center space-x-1">
+                    <div class="p-2.5 bg-emerald-950/50 border border-emerald-500/30 rounded-xl text-[10px] space-y-1">
+                      <div class="font-bold text-emerald-300 flex items-center space-x-1.5">
                         <span>📅 Dynamic Date Range:</span>
                         <span class="text-white font-mono">{topicDateCoverage.earliestDate} ➔ {topicDateCoverage.latestDate || 'Present'}</span>
                       </div>
@@ -1179,34 +1312,34 @@ function App() {
                     </div>
                   )}
 
-                  <div class="grid grid-cols-4 gap-1.5 text-center">
-                    <div class="bg-slate-950 p-2 rounded-lg border border-white/5">
-                      <div class="text-[9px] text-slate-400">Visited</div>
-                      <div class="text-xs font-bold text-slate-100">{topicStats.visited}</div>
+                  <div class="grid grid-cols-4 gap-2 text-center">
+                    <div class="bg-dark-950 p-2.5 rounded-xl border border-white/5">
+                      <div class="text-[9px] text-slate-400 uppercase font-semibold">Visited</div>
+                      <div class="text-sm font-bold text-slate-100 mt-0.5">{topicStats.visited}</div>
                     </div>
-                    <div class="bg-slate-950 p-2 rounded-lg border border-white/5">
-                      <div class="text-[9px] text-slate-400">Queue</div>
-                      <div class="text-xs font-bold text-slate-100">{topicStats.queued}</div>
+                    <div class="bg-dark-950 p-2.5 rounded-xl border border-white/5">
+                      <div class="text-[9px] text-slate-400 uppercase font-semibold">Queue</div>
+                      <div class="text-sm font-bold text-slate-100 mt-0.5">{topicStats.queued}</div>
                     </div>
-                    <div class="bg-slate-950 p-2 rounded-lg border border-white/5">
-                      <div class="text-[9px] text-emerald-400">Scraped</div>
-                      <div class="text-xs font-bold text-emerald-300">{topicStats.succeeded}</div>
+                    <div class="bg-dark-950 p-2.5 rounded-xl border border-white/5">
+                      <div class="text-[9px] text-emerald-400 uppercase font-semibold">Scraped</div>
+                      <div class="text-sm font-bold text-emerald-300 mt-0.5">{topicStats.succeeded}</div>
                     </div>
-                    <div class="bg-slate-950 p-2 rounded-lg border border-white/5">
-                      <div class="text-[9px] text-yellow-400">Skipped</div>
-                      <div class="text-xs font-bold text-yellow-300">{topicStats.skippedExisting || 0}</div>
+                    <div class="bg-dark-950 p-2.5 rounded-xl border border-white/5">
+                      <div class="text-[9px] text-amber-400 uppercase font-semibold">Skipped</div>
+                      <div class="text-sm font-bold text-amber-300 mt-0.5">{topicStats.skippedExisting || 0}</div>
                     </div>
                   </div>
 
                   {/* Real-time pages stream */}
                   {topicPages.length > 0 && (
-                    <div class="space-y-1">
-                      <div class="text-[10px] text-slate-400 font-semibold">Latest Scraped Articles:</div>
+                    <div class="space-y-1.5">
+                      <div class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Latest Scraped Articles:</div>
                       <div class="max-h-24 overflow-y-auto custom-scrollbar space-y-1">
                         {topicPages.map((pg, i) => (
-                          <div key={i} class="p-1.5 bg-slate-950 rounded border border-white/5 flex justify-between items-center text-[9px]">
-                            <span class="font-mono text-emerald-400 truncate max-w-[200px]" title={pg.filename}>{pg.filename}</span>
-                            <span class="text-slate-500 shrink-0">{pg.time}</span>
+                          <div key={i} class="p-1.5 bg-dark-950 rounded-lg border border-white/5 flex justify-between items-center text-[10px]">
+                            <span class="font-mono text-emerald-400 truncate max-w-[220px]" title={pg.filename}>{pg.filename}</span>
+                            <span class="text-slate-500 shrink-0 font-mono text-[9px]">{pg.time}</span>
                           </div>
                         ))}
                       </div>
@@ -1214,7 +1347,7 @@ function App() {
                   )}
 
                   {/* Terminal log output */}
-                  <div class="h-28 overflow-y-auto custom-scrollbar bg-slate-950 border border-white/5 p-2 rounded-lg text-[9px] font-mono text-slate-400 space-y-1">
+                  <div class="h-28 overflow-y-auto custom-scrollbar bg-dark-950 border border-white/5 p-2.5 rounded-xl text-[10px] font-mono text-slate-400 space-y-1">
                     {topicLogs.slice().reverse().map((log, idx) => (
                       <div key={idx} class="truncate" title={log}>{log}</div>
                     ))}
@@ -1223,12 +1356,17 @@ function App() {
               )}
             </div>
           )}
+
+          {/* Mode 2: Batch Scraping */}
           {consoleMode === 'batch' && (
             <div class="space-y-4 animate-fade-in">
-              <div class="space-y-2">
+              <div class="space-y-1.5">
                 <div class="flex justify-between items-center">
-                  <label class="text-xs text-slate-400 font-medium">Index / Listing Page</label>
-                  <button onClick={() => setUrl('https://news.ycombinator.com')} class="text-[10px] text-blue-400 hover:underline">
+                  <label class="text-xs text-slate-300 font-semibold flex items-center space-x-1.5">
+                    <span>📑</span>
+                    <span>Index / Listing Page</span>
+                  </label>
+                  <button onClick={() => setUrl('https://news.ycombinator.com')} class="text-[10px] text-brand-400 hover:underline">
                     HN Sample
                   </button>
                 </div>
@@ -1237,19 +1375,22 @@ function App() {
                   placeholder="https://example.com/blog" 
                   value={url} 
                   onChange={e => setUrl(e.target.value)}
-                  class="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                  class="glass-input w-full px-3.5 py-2.5 rounded-xl text-sm text-slate-100 placeholder-slate-500 font-mono focus:outline-none"
                 />
               </div>
 
-              <div class="space-y-2">
-                <label class="text-xs text-slate-400 font-medium">Subpage Link Selector</label>
+              <div class="space-y-1.5">
+                <label class="text-xs text-slate-300 font-semibold flex items-center space-x-1.5">
+                  <span>🔗</span>
+                  <span>Subpage Link Selector</span>
+                </label>
                 <div class="flex space-x-2">
                   <input 
                     type="text" 
                     placeholder="a.titleline, div.post a" 
                     value={selector} 
                     onChange={e => setSelector(e.target.value)}
-                    class="flex-1 px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-emerald-400 font-mono"
+                    class="glass-input flex-1 px-3 py-2 rounded-xl text-xs text-emerald-400 font-mono"
                   />
                   <button 
                     onClick={async () => {
@@ -1268,30 +1409,30 @@ function App() {
                       } finally { setAutoDetecting(false); }
                     }}
                     disabled={autoDetecting || !url}
-                    class="px-3 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 rounded-xl text-xs font-bold"
+                    class="btn-lux btn-purple-gradient px-3 py-2 text-xs font-bold rounded-xl"
                   >
                     {autoDetecting ? '...' : '🪄 Auto'}
                   </button>
                 </div>
               </div>
 
-              <div class="grid grid-cols-2 gap-2">
+              <div class="grid grid-cols-2 gap-2.5">
                 <div class="space-y-1">
-                  <label class="text-[10px] text-slate-400 font-medium">Concurrency</label>
+                  <label class="text-[11px] text-slate-400 font-medium">Concurrency</label>
                   <input 
                     type="number" 
                     value={batchConcurrency} 
                     onChange={e => setBatchConcurrency(e.target.value)}
-                    class="w-full px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-xl text-xs text-slate-200"
+                    class="glass-input w-full px-3 py-2 rounded-xl text-xs text-slate-200"
                   />
                 </div>
                 <div class="space-y-1">
-                  <label class="text-[10px] text-slate-400 font-medium">Delay (ms)</label>
+                  <label class="text-[11px] text-slate-400 font-medium">Delay (ms)</label>
                   <input 
                     type="number" 
                     value={batchDelay} 
                     onChange={e => setBatchDelay(e.target.value)}
-                    class="w-full px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-xl text-xs text-slate-200"
+                    class="glass-input w-full px-3 py-2 rounded-xl text-xs text-slate-200"
                   />
                 </div>
               </div>
@@ -1299,18 +1440,19 @@ function App() {
               <button 
                 onClick={handleDiscoverLinks} 
                 disabled={loading || discovering || !selector}
-                class="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center shadow-lg"
+                class="btn-lux btn-primary-gradient w-full py-2.5 text-xs font-bold rounded-xl space-x-2 disabled:opacity-40"
               >
-                {discovering ? '🔍 Discovering Links...' : '🔍 Discover Links Matching Selector'}
+                <span>🔍</span>
+                <span>{discovering ? 'Discovering Links...' : 'Discover Links Matching Selector'}</span>
               </button>
 
               {discoveredUrls.length > 0 && (
-                <div class="space-y-2 bg-slate-900/90 border border-white/10 p-3 rounded-xl">
+                <div class="space-y-2.5 glass-card p-3.5 rounded-2xl border border-white/[0.08]">
                   <div class="flex justify-between items-center">
                     <span class="text-xs font-bold text-slate-200">📄 {discoveredUrls.length} Discovered Links</span>
-                    <button onClick={() => setDiscoveredUrls([])} class="text-[10px] text-slate-500 hover:text-slate-300">Clear</button>
+                    <button onClick={() => setDiscoveredUrls([])} class="btn-lux text-[10px] text-slate-400 hover:text-white px-2 py-0.5 rounded-lg bg-white/5">Clear</button>
                   </div>
-                  <div class="max-h-24 overflow-y-auto custom-scrollbar space-y-1 p-1 bg-slate-950 rounded-lg text-[9px] font-mono text-slate-400">
+                  <div class="max-h-28 overflow-y-auto custom-scrollbar space-y-1 p-2 bg-dark-950 rounded-xl text-[10px] font-mono text-slate-400">
                     {discoveredUrls.map((u, i) => (
                       <div key={i} class="truncate" title={u}>• {u}</div>
                     ))}
@@ -1318,9 +1460,10 @@ function App() {
                   <button
                     onClick={handleStartBatchScrape}
                     disabled={loading || batchProgress?.active}
-                    class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-lg"
+                    class="btn-lux btn-emerald-gradient w-full py-2.5 text-xs font-bold rounded-xl space-x-2 disabled:opacity-50"
                   >
-                    ⚡ Scrape All Discovered Links in Parallel
+                    <span>⚡</span>
+                    <span>Scrape All Links in Parallel</span>
                   </button>
                 </div>
               )}
@@ -1332,30 +1475,30 @@ function App() {
             <div class="space-y-4 animate-fade-in">
               {/* Checkpoint Resume Drawer */}
               {checkpoints.length > 0 && (
-                <div class="p-3 bg-indigo-950/40 border border-indigo-500/30 rounded-xl space-y-2">
+                <div class="p-3.5 bg-indigo-950/40 border border-indigo-500/40 rounded-2xl space-y-2 shadow-lg">
                   <div class="flex justify-between items-center text-xs font-bold text-indigo-300">
                     <span>💾 Saved Checkpoints</span>
-                    <span class="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20">{checkpoints.length} Pending</span>
+                    <span class="text-[9px] px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 font-mono">{checkpoints.length} Pending</span>
                   </div>
-                  <div class="space-y-1.5 max-h-28 overflow-y-auto custom-scrollbar">
+                  <div class="space-y-1.5 max-h-32 overflow-y-auto custom-scrollbar">
                     {checkpoints.map(cp => (
-                      <div key={cp.job_id} class="p-2 bg-slate-900 rounded-lg border border-white/5 flex justify-between items-center">
+                      <div key={cp.job_id} class="p-2.5 bg-dark-950 rounded-xl border border-white/5 flex justify-between items-center">
                         <div class="min-w-0 flex-1 pr-2">
                           <div class="text-xs font-semibold text-slate-200 truncate">{cp.job_id}</div>
-                          <div class="text-[9px] text-slate-400 truncate">{cp.seed_url} • {cp.state?.visited?.length || 0} visited</div>
+                          <div class="text-[10px] text-slate-400 truncate">{cp.seed_url} • {cp.state?.visited?.length || 0} visited</div>
                         </div>
-                        <div class="flex space-x-1 shrink-0">
+                        <div class="flex space-x-1.5 shrink-0">
                           <button
                             onClick={() => handleStartSpider(cp.job_id)}
                             disabled={spiderActive}
-                            class="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-bold"
+                            class="btn-lux btn-purple-gradient px-2.5 py-1 rounded-lg text-[10px] font-bold"
                             title="Resume this crawl"
                           >
                             Resume
                           </button>
                           <button
                             onClick={() => handleDeleteCheckpoint(cp.job_id)}
-                            class="px-1.5 py-1 bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white rounded text-[10px]"
+                            class="btn-lux px-2 py-1 bg-dark-900 hover:bg-red-600 text-slate-400 hover:text-white rounded-lg text-[10px]"
                             title="Delete checkpoint"
                           >
                             ✕
@@ -1367,55 +1510,58 @@ function App() {
                 </div>
               )}
 
-              <div class="space-y-2">
-                <label class="text-xs text-slate-400 font-medium">Seed URL</label>
+              <div class="space-y-1.5">
+                <label class="text-xs text-slate-300 font-semibold flex items-center space-x-1.5">
+                  <span>🕸️</span>
+                  <span>Seed URL</span>
+                </label>
                 <input 
                   type="url" 
                   placeholder="https://example.com" 
                   value={url} 
                   onChange={e => setUrl(e.target.value)}
-                  class="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                  class="glass-input w-full px-3.5 py-2.5 rounded-xl text-sm text-slate-100 placeholder-slate-500 font-mono focus:outline-none"
                 />
               </div>
 
-              <div class="grid grid-cols-2 gap-2">
+              <div class="grid grid-cols-2 gap-2.5">
                 <div class="space-y-1">
-                  <label class="text-[10px] text-slate-400 font-medium">Max Depth</label>
+                  <label class="text-[11px] text-slate-400 font-medium">Max Depth</label>
                   <input 
                     type="text" 
                     value={spiderDepth} 
                     onChange={e => setSpiderDepth(e.target.value)}
-                    class="w-full px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-xl text-xs text-slate-200"
+                    class="glass-input w-full px-3 py-2 rounded-xl text-xs text-slate-200"
                   />
                 </div>
                 <div class="space-y-1">
-                  <label class="text-[10px] text-slate-400 font-medium">Page Budget</label>
+                  <label class="text-[11px] text-slate-400 font-medium">Page Budget</label>
                   <input 
                     type="number" 
                     value={spiderMaxPages} 
                     onChange={e => setSpiderMaxPages(e.target.value)}
-                    class="w-full px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-xl text-xs text-slate-200"
+                    class="glass-input w-full px-3 py-2 rounded-xl text-xs text-slate-200"
                   />
                 </div>
               </div>
 
-              <div class="grid grid-cols-2 gap-2">
+              <div class="grid grid-cols-2 gap-2.5">
                 <div class="space-y-1">
-                  <label class="text-[10px] text-slate-400 font-medium">Concurrency</label>
+                  <label class="text-[11px] text-slate-400 font-medium">Concurrency</label>
                   <input 
                     type="number" 
                     value={spiderConcurrency} 
                     onChange={e => setSpiderConcurrency(e.target.value)}
-                    class="w-full px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-xl text-xs text-slate-200"
+                    class="glass-input w-full px-3 py-2 rounded-xl text-xs text-slate-200"
                   />
                 </div>
                 <div class="space-y-1">
-                  <label class="text-[10px] text-slate-400 font-medium">Delay (ms)</label>
+                  <label class="text-[11px] text-slate-400 font-medium">Delay (ms)</label>
                   <input 
                     type="number" 
                     value={spiderDelay} 
                     onChange={e => setSpiderDelay(e.target.value)}
-                    class="w-full px-2.5 py-1.5 bg-slate-900 border border-white/10 rounded-xl text-xs text-slate-200"
+                    class="glass-input w-full px-3 py-2 rounded-xl text-xs text-slate-200"
                   />
                 </div>
               </div>
@@ -1425,26 +1571,28 @@ function App() {
                 {!spiderActive ? (
                   <button 
                     onClick={() => handleStartSpider()} 
-                    class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-indigo-600/20 active:scale-95 flex items-center justify-center"
+                    class="btn-lux btn-purple-gradient w-full py-3 text-xs font-bold rounded-xl space-x-2"
                   >
-                    <span class="mr-1.5">🕸️</span>
-                    Start Recursive Spider
+                    <span>🕸️</span>
+                    <span>Start Recursive Spider</span>
                   </button>
                 ) : (
                   <div class="grid grid-cols-2 gap-2">
                     <button
                       onClick={handlePauseSpider}
-                      class="py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center justify-center shadow-lg"
+                      class="btn-lux btn-amber-gradient py-2.5 text-xs font-bold rounded-xl space-x-1.5"
                       title="Pause crawl and save checkpoint state"
                     >
-                      <span class="mr-1">⏸️</span> Pause & Save
+                      <span>⏸️</span>
+                      <span>Pause & Save</span>
                     </button>
                     <button
                       onClick={handleCancelSpider}
-                      class="py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center justify-center shadow-lg"
+                      class="btn-lux btn-danger-gradient py-2.5 text-xs font-bold rounded-xl space-x-1.5"
                       title="Stop crawl"
                     >
-                      <span class="mr-1">🛑</span> Stop
+                      <span>🛑</span>
+                      <span>Stop Crawl</span>
                     </button>
                   </div>
                 )}
@@ -1452,42 +1600,44 @@ function App() {
 
               {/* Live Spider Statistics & Logs */}
               {(spiderActive || spiderLogs.length > 0) && (
-                <div class="space-y-3 bg-slate-900/90 border border-white/10 p-3.5 rounded-xl">
+                <div class="space-y-3 glass-card border border-white/[0.08] p-4 rounded-2xl shadow-xl">
                   <div class="flex justify-between items-center">
-                    <span class="text-xs font-bold text-slate-200">Crawl Metrics</span>
-                    <span class={`text-[9px] font-bold px-2 py-0.5 rounded-full ${spiderActive ? 'bg-indigo-500/20 text-indigo-300 animate-pulse' : 'bg-emerald-500/20 text-emerald-300'}`}>
+                    <span class="text-xs font-bold text-slate-200 font-display">Crawl Metrics</span>
+                    <span class={`text-[9px] font-bold px-2.5 py-0.5 rounded-full ${
+                      spiderActive ? 'bg-indigo-500/20 text-indigo-300 animate-pulse border border-indigo-500/40' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    }`}>
                       {spiderActive ? 'RUNNING' : 'COMPLETED'}
                     </span>
                   </div>
 
-                  <div class="grid grid-cols-4 gap-1.5 text-center">
-                    <div class="bg-slate-950 p-2 rounded-lg border border-white/5">
-                      <div class="text-[9px] text-slate-400">Visited</div>
-                      <div class="text-xs font-bold text-slate-100">{spiderStats.visited}</div>
+                  <div class="grid grid-cols-4 gap-2 text-center">
+                    <div class="bg-dark-950 p-2.5 rounded-xl border border-white/5">
+                      <div class="text-[9px] text-slate-400 uppercase font-semibold">Visited</div>
+                      <div class="text-sm font-bold text-slate-100 mt-0.5">{spiderStats.visited}</div>
                     </div>
-                    <div class="bg-slate-950 p-2 rounded-lg border border-white/5">
-                      <div class="text-[9px] text-slate-400">Queue</div>
-                      <div class="text-xs font-bold text-slate-100">{spiderStats.queued}</div>
+                    <div class="bg-dark-950 p-2.5 rounded-xl border border-white/5">
+                      <div class="text-[9px] text-slate-400 uppercase font-semibold">Queue</div>
+                      <div class="text-sm font-bold text-slate-100 mt-0.5">{spiderStats.queued}</div>
                     </div>
-                    <div class="bg-slate-950 p-2 rounded-lg border border-white/5">
-                      <div class="text-[9px] text-emerald-400">Ok</div>
-                      <div class="text-xs font-bold text-emerald-300">{spiderStats.succeeded}</div>
+                    <div class="bg-dark-950 p-2.5 rounded-xl border border-white/5">
+                      <div class="text-[9px] text-emerald-400 uppercase font-semibold">Ok</div>
+                      <div class="text-sm font-bold text-emerald-300 mt-0.5">{spiderStats.succeeded}</div>
                     </div>
-                    <div class="bg-slate-950 p-2 rounded-lg border border-white/5">
-                      <div class="text-[9px] text-red-400">Fail</div>
-                      <div class="text-xs font-bold text-red-300">{spiderStats.failed}</div>
+                    <div class="bg-dark-950 p-2.5 rounded-xl border border-white/5">
+                      <div class="text-[9px] text-rose-400 uppercase font-semibold">Fail</div>
+                      <div class="text-sm font-bold text-rose-300 mt-0.5">{spiderStats.failed}</div>
                     </div>
                   </div>
 
                   {/* Real-time pages stream */}
                   {spiderPages.length > 0 && (
-                    <div class="space-y-1">
-                      <div class="text-[10px] text-slate-400 font-semibold">Live Scraped Pages:</div>
+                    <div class="space-y-1.5">
+                      <div class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Live Scraped Pages:</div>
                       <div class="max-h-24 overflow-y-auto custom-scrollbar space-y-1">
                         {spiderPages.map((pg, i) => (
-                          <div key={i} class="p-1.5 bg-slate-950 rounded border border-white/5 flex justify-between items-center text-[9px]">
-                            <span class="font-mono text-emerald-400 truncate max-w-[200px]" title={pg.filename}>{pg.filename}</span>
-                            <span class="text-slate-500 shrink-0">{pg.time}</span>
+                          <div key={i} class="p-1.5 bg-dark-950 rounded-lg border border-white/5 flex justify-between items-center text-[10px]">
+                            <span class="font-mono text-emerald-400 truncate max-w-[220px]" title={pg.filename}>{pg.filename}</span>
+                            <span class="text-slate-500 shrink-0 font-mono text-[9px]">{pg.time}</span>
                           </div>
                         ))}
                       </div>
@@ -1495,7 +1645,7 @@ function App() {
                   )}
 
                   {/* Terminal log output */}
-                  <div class="h-28 overflow-y-auto custom-scrollbar bg-slate-950 border border-white/5 p-2 rounded-lg text-[9px] font-mono text-slate-400 space-y-1">
+                  <div class="h-28 overflow-y-auto custom-scrollbar bg-dark-950 border border-white/5 p-2.5 rounded-xl text-[10px] font-mono text-slate-400 space-y-1">
                     {spiderLogs.slice().reverse().map((log, idx) => (
                       <div key={idx} class="truncate" title={log}>{log}</div>
                     ))}
@@ -1506,23 +1656,35 @@ function App() {
           )}
 
           {/* Profiles section */}
-          <div class="space-y-3 pt-3 border-t border-white/5 flex-1 flex flex-col min-h-[140px]">
-            <h2 class="text-xs font-bold tracking-wider text-slate-400 uppercase">Saved Scraper Profiles</h2>
-            <div class="flex-1 overflow-y-auto custom-scrollbar space-y-1.5 max-h-[180px]">
+          <div class="space-y-2.5 pt-3 border-t border-white/[0.08] flex-1 flex flex-col min-h-[140px]">
+            <div class="flex justify-between items-center">
+              <h2 class="text-[11px] font-bold tracking-wider text-slate-400 uppercase font-display">Saved Scraper Profiles</h2>
+              <span class="text-[10px] text-brand-400 font-mono">{profiles.length}</span>
+            </div>
+            <div class="flex-1 overflow-y-auto custom-scrollbar space-y-1.5 max-h-[160px]">
               {profiles.length === 0 ? (
-                <div class="text-xs text-slate-500 italic p-2">No profiles yet.</div>
+                <div class="text-xs text-slate-500 italic p-3 bg-dark-950/40 rounded-xl border border-white/5 text-center">No profiles saved yet.</div>
               ) : (
                 profiles.map(p => (
                   <div 
                     key={p.id} 
                     onClick={() => handleApplyProfile(p)}
-                    class="p-2 rounded-xl bg-slate-900/60 hover:bg-slate-800 border border-white/5 cursor-pointer transition-all flex justify-between items-center group active:scale-98"
+                    class="p-2.5 rounded-xl bg-dark-950/60 hover:bg-dark-900 border border-white/5 hover:border-brand-500/30 cursor-pointer transition-all flex justify-between items-center group shadow-sm active:scale-[0.99]"
                   >
                     <div class="truncate pr-2">
-                      <div class="text-xs font-semibold text-slate-200 truncate">{p.name}</div>
+                      <div class="text-xs font-semibold text-slate-200 group-hover:text-brand-300 transition-colors truncate">{p.name}</div>
                       <div class="text-[10px] text-teal-400 font-mono truncate">{p.selectors?.content || 'auto'}</div>
                     </div>
-                    <span class="text-[9px] text-blue-400 font-bold uppercase opacity-80 group-hover:opacity-100">Apply</span>
+                    <div class="flex items-center space-x-1.5 shrink-0">
+                      <span class="btn-lux text-[9px] text-brand-300 bg-brand-500/10 border border-brand-500/20 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider group-hover:bg-brand-500/20">Apply</span>
+                      <button
+                        onClick={(e) => handleDeleteProfile(e, p.id, p.name)}
+                        class="btn-lux text-slate-500 hover:text-rose-400 p-1 rounded-md hover:bg-rose-500/10 transition-colors text-[10px]"
+                        title="Delete profile"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
@@ -1530,9 +1692,9 @@ function App() {
           </div>
 
           {/* Recent Scrapes History */}
-          <div class="space-y-3 pt-3 border-t border-white/5 flex-1 flex flex-col min-h-[180px]">
+          <div class="space-y-2.5 pt-3 border-t border-white/[0.08] flex-1 flex flex-col min-h-[180px]">
             <div class="flex justify-between items-center">
-              <h2 class="text-xs font-bold tracking-wider text-slate-400 uppercase">Recent Scrapes ({history.length})</h2>
+              <h2 class="text-[11px] font-bold tracking-wider text-slate-400 uppercase font-display">Recent Scrapes ({history.length})</h2>
             </div>
             
             <div class="flex space-x-1.5">
@@ -1544,37 +1706,48 @@ function App() {
                   setCategoryFilter(e.target.value);
                   loadData(e.target.value);
                 }}
-                class="w-full px-2.5 py-1 bg-slate-900 border border-white/10 rounded-lg text-xs text-slate-300 placeholder-slate-500"
+                class="glass-input w-full px-3 py-1.5 rounded-xl text-xs text-slate-300 placeholder-slate-500 focus:outline-none"
               />
               {categoryFilter && (
-                <button onClick={() => { setCategoryFilter(''); loadData(''); }} class="text-xs text-slate-400 hover:text-white px-1">
+                <button onClick={() => { setCategoryFilter(''); loadData(''); }} class="btn-lux px-2 text-xs text-slate-400 hover:text-white rounded-xl bg-white/5">
                   ✕
                 </button>
               )}
             </div>
 
-            <div class="flex-1 overflow-y-auto custom-scrollbar space-y-1.5 max-h-[220px]">
+            <div class="flex-1 overflow-y-auto custom-scrollbar space-y-1.5 max-h-[200px]">
               {history.length === 0 ? (
-                <div class="text-xs text-slate-500 italic p-2">No past scrapes logged.</div>
+                <div class="text-xs text-slate-500 italic p-3 bg-dark-950/40 rounded-xl border border-white/5 text-center">No past scrapes logged.</div>
               ) : (
                 history.slice(0, 15).map(s => (
                   <div 
                     key={s.id} 
                     onClick={() => handleViewScrape(s)}
-                    class="p-2 rounded-xl bg-slate-900/40 hover:bg-slate-800 border border-white/5 cursor-pointer transition-all flex items-start space-x-2 active:scale-98"
+                    class="p-2.5 rounded-xl bg-dark-950/50 hover:bg-dark-900 border border-white/5 hover:border-white/10 cursor-pointer transition-all flex items-start space-x-2.5 shadow-sm active:scale-[0.99] group"
                   >
-                    <span class={`text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0 mt-0.5 ${s.status === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                    <span class={`text-[9px] px-1.5 py-0.5 rounded-md font-mono font-bold shrink-0 mt-0.5 border ${
+                      s.status === 'success' 
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                        : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                    }`}>
                       #{s.id}
                     </span>
                     <div class="min-w-0 flex-1">
                       <div class="text-xs text-slate-200 font-medium truncate">{s.title || s.url}</div>
-                      <div class="text-[9px] text-slate-500 truncate">{s.url}</div>
+                      <div class="text-[10px] text-slate-500 font-mono truncate">{s.url}</div>
                       {s.category && (
-                        <span class="inline-block mt-0.5 text-[8px] bg-blue-500/10 text-blue-400 px-1 rounded font-semibold">
+                        <span class="inline-block mt-1 text-[8px] bg-brand-500/10 text-brand-300 border border-brand-500/20 px-1.5 py-0.2 rounded font-semibold">
                           {s.category}
                         </span>
                       )}
                     </div>
+                    <button
+                      onClick={(e) => handleDeleteScrape(e, s.id)}
+                      class="btn-lux text-slate-500 hover:text-rose-400 p-1 rounded-md hover:bg-rose-500/10 transition-colors text-[10px] opacity-0 group-hover:opacity-100 shrink-0"
+                      title="Delete scrape record"
+                    >
+                      ✕
+                    </button>
                   </div>
                 ))
               )}
@@ -1584,33 +1757,49 @@ function App() {
         </section>
 
         {/* Right Main Display Panel */}
-        <section class="flex-1 flex flex-col bg-slate-950 overflow-hidden relative">
+        <section class="flex-1 flex flex-col bg-dark-950/40 overflow-hidden relative">
           {/* Main Top Tab Navigation */}
-          <div class="h-12 border-b border-white/5 flex items-center px-6 space-x-4 shrink-0 bg-slate-900/40">
+          <div class="h-14 border-b border-white/[0.08] flex items-center px-6 space-x-2 shrink-0 bg-dark-950/80 backdrop-blur-md">
             <button 
               onClick={() => setActiveTab('iframe')}
-              class={`h-full px-3 text-xs font-bold border-b-2 transition-all flex items-center space-x-1.5 ${activeTab === 'iframe' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+              class={`btn-lux h-9 px-3.5 text-xs font-semibold rounded-xl transition-all space-x-2 ${
+                activeTab === 'iframe' 
+                  ? 'bg-brand-600/20 text-brand-300 border border-brand-500/40 shadow-sm' 
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+              }`}
             >
               <span>🌐</span>
               <span>Visual Target Preview</span>
             </button>
             <button 
               onClick={() => setActiveTab('markdown')}
-              class={`h-full px-3 text-xs font-bold border-b-2 transition-all flex items-center space-x-1.5 ${activeTab === 'markdown' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+              class={`btn-lux h-9 px-3.5 text-xs font-semibold rounded-xl transition-all space-x-2 ${
+                activeTab === 'markdown' 
+                  ? 'bg-brand-600/20 text-brand-300 border border-brand-500/40 shadow-sm' 
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+              }`}
             >
               <span>📝</span>
               <span>Extracted Markdown</span>
             </button>
             <button 
               onClick={() => setActiveTab('query')}
-              class={`h-full px-3 text-xs font-bold border-b-2 transition-all flex items-center space-x-1.5 ${activeTab === 'query' ? 'border-teal-500 text-teal-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+              class={`btn-lux h-9 px-3.5 text-xs font-semibold rounded-xl transition-all space-x-2 ${
+                activeTab === 'query' 
+                  ? 'bg-teal-600/20 text-teal-300 border border-teal-500/40 shadow-sm' 
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+              }`}
             >
               <span>🧪</span>
               <span>Live Query & REPL</span>
             </button>
             <button 
               onClick={() => setActiveTab('adaptive')}
-              class={`h-full px-3 text-xs font-bold border-b-2 transition-all flex items-center space-x-1.5 ${activeTab === 'adaptive' ? 'border-purple-500 text-purple-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+              class={`btn-lux h-9 px-3.5 text-xs font-semibold rounded-xl transition-all space-x-2 ${
+                activeTab === 'adaptive' 
+                  ? 'bg-purple-600/20 text-purple-300 border border-purple-500/40 shadow-sm' 
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+              }`}
             >
               <span>🎯</span>
               <span>Adaptive Studio</span>
@@ -1620,7 +1809,11 @@ function App() {
                 setActiveTab('entities');
                 safeFetchJson('/api/bandit').then(b => setBanditStats(b || []));
               }}
-              class={`h-full px-3 text-xs font-bold border-b-2 transition-all flex items-center space-x-1.5 ${activeTab === 'entities' ? 'border-amber-500 text-amber-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+              class={`btn-lux h-9 px-3.5 text-xs font-semibold rounded-xl transition-all space-x-2 ${
+                activeTab === 'entities' 
+                  ? 'bg-amber-600/20 text-amber-300 border border-amber-500/40 shadow-sm' 
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+              }`}
             >
               <span>📦</span>
               <span>Entities & Bandit RL</span>
@@ -1629,11 +1822,11 @@ function App() {
 
           {/* Loading Overlay */}
           {loading && (
-            <div class="absolute inset-0 bg-slate-950/80 flex flex-col items-center justify-center z-50">
-              <div class="relative w-14 h-14 mb-3">
-                <div class="absolute inset-0 rounded-full border-4 border-blue-500/20 border-t-blue-500 animate-spin"></div>
+            <div class="absolute inset-0 bg-dark-950/80 backdrop-blur-sm flex flex-col items-center justify-center z-50 animate-fade-in">
+              <div class="relative w-16 h-16 mb-4">
+                <div class="absolute inset-0 rounded-full border-4 border-brand-500/20 border-t-brand-500 animate-spin"></div>
               </div>
-              <p class="text-xs font-bold text-blue-400 tracking-wider animate-pulse uppercase">PROCESSING REQUEST...</p>
+              <p class="text-xs font-bold text-brand-400 tracking-widest font-mono uppercase animate-pulse">PROCESSING REQUEST...</p>
             </div>
           )}
 
@@ -1647,10 +1840,26 @@ function App() {
                 class="w-full h-full border-none bg-white"
               ></iframe>
             ) : (
-              <div class="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-3">
-                <div class="text-5xl text-slate-700">🕸️</div>
-                <h3 class="text-base font-bold text-slate-300">No Target URL Loaded in Visual Picker</h3>
-                <p class="text-xs text-slate-500 max-w-md">Enter a URL in the left targeting panel and click "Proxy Page". The page will load with visual element highlighting enabled.</p>
+              <div class="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-4">
+                <div class="w-20 h-20 rounded-3xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-4xl shadow-xl shadow-brand-500/10">
+                  🕸️
+                </div>
+                <div class="space-y-1.5 max-w-md">
+                  <h3 class="text-base font-display font-bold text-slate-200">No Target URL Loaded in Visual Picker</h3>
+                  <p class="text-xs text-slate-400 leading-relaxed">
+                    Enter any website URL in the left targeting panel and click <strong class="text-brand-400">Proxy Target</strong>. You can click on any headline or product card to capture its 64-bit SimHash DOM fingerprint.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setUrl('https://quotes.toscrape.com');
+                    setIframeUrl('/api/proxy?url=' + encodeURIComponent('https://quotes.toscrape.com') + '&mode=' + renderMode);
+                    setLoading(true);
+                  }}
+                  class="btn-lux btn-primary-gradient px-4 py-2 text-xs font-semibold rounded-xl"
+                >
+                  Load Sample Site (quotes.toscrape.com)
+                </button>
               </div>
             )}
           </div>
@@ -1658,106 +1867,132 @@ function App() {
           {/* Tab 2: Markdown Preview */}
           <div class={`flex-1 h-full overflow-auto custom-scrollbar p-6 ${activeTab === 'markdown' ? 'block' : 'hidden'}`}>
             {markdownOutput ? (
-              <div class="space-y-4 max-w-4xl mx-auto">
+              <div class="space-y-4 max-w-5xl mx-auto">
                 {lastDecision && (
-                  <div class="bg-amber-950/30 border border-amber-500/30 p-3 rounded-xl flex items-center justify-between text-xs text-amber-200">
-                    <div class="flex items-center space-x-2.5">
-                      <span class="text-lg">🌳</span>
+                  <div class="glass-card bg-amber-950/20 border border-amber-500/30 p-4 rounded-2xl flex items-center justify-between text-xs text-amber-200 shadow-lg">
+                    <div class="flex items-center space-x-3">
+                      <span class="text-2xl">🌳</span>
                       <div>
-                        <div class="font-bold flex items-center space-x-2">
-                          <span>Decision Tree Route: <span class="uppercase text-amber-400 font-mono px-1.5 py-0.5 bg-amber-500/20 rounded">{lastDecision.tier}</span></span>
-                          <span class="text-amber-300/70 text-[11px]">({Math.round((lastDecision.confidence || 1) * 100)}% Confidence)</span>
+                        <div class="font-bold flex items-center space-x-2 font-display">
+                          <span>Decision Tree Route: <span class="uppercase text-amber-300 font-mono px-2 py-0.5 bg-amber-500/20 rounded-md border border-amber-500/30">{lastDecision.tier}</span></span>
+                          <span class="text-amber-400/80 text-[11px] font-mono">({Math.round((lastDecision.confidence || 1) * 100)}% Confidence)</span>
                         </div>
                         <div class="text-[11px] text-amber-300/80 font-mono mt-0.5">{lastDecision.label}</div>
                       </div>
                     </div>
                     {lastDecision.explanation && (
-                      <span class="text-[10px] text-slate-400 font-mono hidden md:inline-block max-w-xs truncate" title={lastDecision.explanation}>
+                      <span class="text-[11px] text-slate-400 font-mono hidden md:inline-block max-w-sm truncate" title={lastDecision.explanation}>
                         {lastDecision.explanation}
                       </span>
                     )}
                   </div>
                 )}
-                <div class="flex justify-between items-center bg-slate-900 border border-white/5 p-3 rounded-xl">
-                  <span class="text-xs text-slate-400 font-mono">Word Count: {markdownOutput.split(/\s+/).length}</span>
-                  <button 
-                    onClick={handleCopyMarkdown}
-                    class="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-all active:scale-95 shadow-md shadow-blue-600/20"
-                  >
-                    Copy Markdown
-                  </button>
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 glass-card p-3.5 rounded-2xl border border-white/[0.08]">
+                  <div class="flex items-center space-x-3 text-xs text-slate-400 font-mono">
+                    <span>Words: <strong class="text-brand-300">{markdownOutput.split(/\s+/).filter(Boolean).length}</strong></span>
+                    <span>•</span>
+                    <span>Characters: <strong class="text-teal-300">{markdownOutput.length}</strong></span>
+                  </div>
+                  <div class="flex items-center space-x-2">
+                    <button 
+                      onClick={handleDownloadMarkdown}
+                      class="btn-lux btn-ghost-lux px-3.5 py-1.5 text-xs font-semibold rounded-xl space-x-1.5"
+                      title="Download as markdown file"
+                    >
+                      <span>💾</span>
+                      <span>Download .md</span>
+                    </button>
+                    <button 
+                      onClick={handleCopyMarkdown}
+                      class={`btn-lux px-4 py-1.5 text-xs font-bold rounded-xl space-x-1.5 ${
+                        copiedMarkdown ? 'btn-emerald-gradient' : 'btn-primary-gradient'
+                      }`}
+                    >
+                      <span>{copiedMarkdown ? '✔' : '📋'}</span>
+                      <span>{copiedMarkdown ? 'Copied to Clipboard!' : 'Copy Markdown'}</span>
+                    </button>
+                  </div>
                 </div>
-                <pre class="p-6 rounded-2xl border border-white/10 bg-slate-900 font-mono text-xs text-emerald-300 overflow-x-auto custom-scrollbar leading-relaxed whitespace-pre-wrap">
+                <pre class="p-6 rounded-2xl border border-white/[0.08] bg-dark-900/90 font-mono text-xs text-emerald-300 overflow-x-auto custom-scrollbar leading-relaxed whitespace-pre-wrap shadow-2xl">
                   {markdownOutput}
                 </pre>
               </div>
             ) : (
-              <div class="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-3">
-                <div class="text-5xl text-slate-700">📝</div>
-                <h3 class="text-base font-bold text-slate-300">No Extracted Markdown</h3>
-                <p class="text-xs text-slate-500 max-w-md">Click "Scrape Now" or click any scrape in Recent History to inspect high-fidelity GFM Markdown.</p>
+              <div class="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-4">
+                <div class="w-20 h-20 rounded-3xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-4xl shadow-xl shadow-brand-500/10">
+                  📝
+                </div>
+                <div class="space-y-1.5 max-w-md">
+                  <h3 class="text-base font-display font-bold text-slate-200">No Extracted Markdown Output</h3>
+                  <p class="text-xs text-slate-400 leading-relaxed">
+                    Click <strong class="text-emerald-400">Scrape Now</strong> or click any entry in Recent History to inspect sanitized GitHub Flavored Markdown with preserved tables and YAML frontmatter.
+                  </p>
+                </div>
               </div>
             )}
           </div>
 
           {/* Tab 3: Live Query & REPL Tester */}
           <div class={`flex-1 h-full overflow-auto custom-scrollbar p-6 ${activeTab === 'query' ? 'block' : 'hidden'}`}>
-            <div class="max-w-4xl mx-auto space-y-5">
-              <div class="p-5 bg-slate-900 border border-white/10 rounded-2xl space-y-4">
+            <div class="max-w-5xl mx-auto space-y-5">
+              <div class="glass-card p-6 rounded-2xl space-y-4 border border-white/[0.08] shadow-xl">
                 <div class="flex justify-between items-center">
                   <div>
-                    <h3 class="text-sm font-bold text-slate-200">🧪 Interactive Query & REPL Tester</h3>
-                    <p class="text-xs text-slate-400">Test CSS, XPath, or Regex queries live on {url || 'target URL'}</p>
+                    <h3 class="text-sm font-display font-bold text-slate-100 flex items-center space-x-2">
+                      <span>🧪</span>
+                      <span>Interactive Query & REPL Tester</span>
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Test CSS, XPath, or Regex queries live on {url || 'target URL'}</p>
                   </div>
-                  <div class="flex bg-slate-950 p-1 rounded-lg border border-white/10">
+                  <div class="flex bg-dark-950 p-1 rounded-xl border border-white/10">
                     <button
                       onClick={() => setQueryType('css')}
-                      class={`px-2.5 py-1 text-xs font-bold rounded ${queryType === 'css' ? 'bg-teal-600 text-white' : 'text-slate-400'}`}
+                      class={`btn-lux px-3 py-1 text-xs font-bold rounded-lg transition-all ${queryType === 'css' ? 'bg-teal-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                     >
                       CSS
                     </button>
                     <button
                       onClick={() => setQueryType('xpath')}
-                      class={`px-2.5 py-1 text-xs font-bold rounded ${queryType === 'xpath' ? 'bg-teal-600 text-white' : 'text-slate-400'}`}
+                      class={`btn-lux px-3 py-1 text-xs font-bold rounded-lg transition-all ${queryType === 'xpath' ? 'bg-teal-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                     >
                       XPath
                     </button>
                     <button
                       onClick={() => setQueryType('regex')}
-                      class={`px-2.5 py-1 text-xs font-bold rounded ${queryType === 'regex' ? 'bg-teal-600 text-white' : 'text-slate-400'}`}
+                      class={`btn-lux px-3 py-1 text-xs font-bold rounded-lg transition-all ${queryType === 'regex' ? 'bg-teal-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                     >
                       Regex
                     </button>
                   </div>
                 </div>
 
-                <div class="flex space-x-2">
+                <div class="flex space-x-2.5">
                   <input
                     type="text"
                     placeholder={queryType === 'css' ? 'e.g. h1, article a, table.itemlist' : queryType === 'xpath' ? 'e.g. //h1 | //a[@href]' : 'e.g. [a-zA-Z0-9]+'}
                     value={queryInput}
                     onChange={e => setQueryInput(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleRunQuery()}
-                    class="flex-1 px-3 py-2 bg-slate-950 border border-white/10 rounded-xl text-xs text-teal-300 font-mono focus:outline-none focus:border-teal-500"
+                    class="glass-input flex-1 px-4 py-2.5 rounded-xl text-xs text-teal-300 font-mono focus:outline-none"
                   />
                   <button
                     onClick={handleRunQuery}
                     disabled={queryRunning || !url || !queryInput}
-                    class="px-4 py-2 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-md shadow-teal-600/20"
+                    class="btn-lux bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-xs font-bold border border-teal-400/40 shadow-lg shadow-teal-600/20"
                   >
                     {queryRunning ? 'Evaluating...' : 'Run Query'}
                   </button>
                 </div>
 
                 <div class="flex items-center space-x-2 text-[11px] text-slate-400">
-                  <span class="font-bold text-slate-500">Presets:</span>
-                  <button onClick={() => { setQueryType('css'); setQueryInput('h1, h2'); }} class="hover:text-teal-300 underline">Headers</button>
+                  <span class="font-bold text-slate-500 font-display">Presets:</span>
+                  <button onClick={() => { setQueryType('css'); setQueryInput('h1, h2'); }} class="text-teal-300 hover:underline">Headers</button>
                   <span>•</span>
-                  <button onClick={() => { setQueryType('css'); setQueryInput('a[href]'); }} class="hover:text-teal-300 underline">Links</button>
+                  <button onClick={() => { setQueryType('css'); setQueryInput('a[href]'); }} class="text-teal-300 hover:underline">Links</button>
                   <span>•</span>
-                  <button onClick={() => { setQueryType('css'); setQueryInput('article'); }} class="hover:text-teal-300 underline">Articles</button>
+                  <button onClick={() => { setQueryType('css'); setQueryInput('article'); }} class="text-teal-300 hover:underline">Articles</button>
                   <span>•</span>
-                  <button onClick={() => { setQueryType('xpath'); setQueryInput('//a'); }} class="hover:text-teal-300 underline">XPath Anchors</button>
+                  <button onClick={() => { setQueryType('xpath'); setQueryInput('//a'); }} class="text-teal-300 hover:underline">XPath Anchors</button>
                 </div>
               </div>
 
@@ -1766,19 +2001,19 @@ function App() {
                 <div class="space-y-3 animate-fade-in">
                   <div class="flex justify-between items-center text-xs text-slate-400 px-1">
                     <span class="font-bold text-slate-200">Matched {queryResults.count} Elements</span>
-                    <span>Timing: <strong class="text-emerald-400">{queryResults.elapsed}ms</strong> • Tier: <strong class="text-blue-400 uppercase">{queryResults.fetcher}</strong></span>
+                    <span>Timing: <strong class="text-emerald-400 font-mono">{queryResults.elapsed}ms</strong> • Tier: <strong class="text-brand-400 uppercase font-mono">{queryResults.fetcher}</strong></span>
                   </div>
 
-                  <div class="space-y-2">
+                  <div class="space-y-2.5">
                     {queryResults.matches.map((m, idx) => (
-                      <div key={idx} class="p-3 bg-slate-900 border border-white/5 rounded-xl space-y-1.5 font-mono text-xs">
+                      <div key={idx} class="p-3.5 glass-card rounded-2xl space-y-1.5 font-mono text-xs border border-white/[0.08]">
                         <div class="flex justify-between items-center">
-                          <span class="px-2 py-0.5 bg-teal-500/10 text-teal-300 rounded font-bold">&lt;{m.tag}&gt;</span>
+                          <span class="px-2 py-0.5 bg-teal-500/15 text-teal-300 border border-teal-500/30 rounded-md font-bold">&lt;{m.tag}&gt;</span>
                           <span class="text-[10px] text-slate-500">#{idx + 1}</span>
                         </div>
                         <div class="text-slate-200 font-sans">{m.text || '<empty text>'}</div>
                         {m.attribs && Object.keys(m.attribs).length > 0 && (
-                          <div class="text-[10px] text-slate-400 truncate">
+                          <div class="text-[10px] text-slate-400 truncate bg-dark-950 p-1.5 rounded-lg border border-white/5">
                             Attrs: {JSON.stringify(m.attribs)}
                           </div>
                         )}
@@ -1792,17 +2027,20 @@ function App() {
 
           {/* Tab 4: Adaptive Self-Healing Studio */}
           <div class={`flex-1 h-full overflow-auto custom-scrollbar p-6 ${activeTab === 'adaptive' ? 'block' : 'hidden'}`}>
-            <div class="max-w-4xl mx-auto space-y-5">
-              <div class="p-5 bg-slate-900 border border-white/10 rounded-2xl space-y-3">
+            <div class="max-w-5xl mx-auto space-y-5">
+              <div class="glass-card p-6 rounded-2xl space-y-4 border border-white/[0.08] shadow-xl">
                 <div class="flex justify-between items-center">
                   <div>
-                    <h3 class="text-sm font-bold text-slate-200">🎯 Adaptive Self-Healing Studio</h3>
-                    <p class="text-xs text-slate-400">Scrapling-inspired multi-anchor structural fingerprinting protects scrapers against website redesigns</p>
+                    <h3 class="text-sm font-display font-bold text-slate-100 flex items-center space-x-2">
+                      <span>🎯</span>
+                      <span>Adaptive Self-Healing Studio</span>
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Scrapling-inspired 64-bit SimHash structural fingerprinting protects scrapers against website redesigns</p>
                   </div>
                   <button
                     onClick={() => handleTestAdaptive()}
                     disabled={testingAdaptive || !activeSignature}
-                    class="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-md shadow-purple-600/20"
+                    class="btn-lux btn-purple-gradient px-4 py-2.5 disabled:opacity-50 text-white rounded-xl text-xs font-bold"
                   >
                     {testingAdaptive ? 'Relocating...' : '⚡ Test Relocation on Target'}
                   </button>
@@ -1810,19 +2048,19 @@ function App() {
 
                 {activeSignature ? (
                   <div class="grid grid-cols-2 gap-3 pt-2">
-                    <div class="p-3 bg-slate-950 rounded-xl border border-white/5 space-y-1">
-                      <div class="text-[10px] text-slate-500 uppercase font-bold">Anchor Tag & Hierarchy</div>
+                    <div class="p-3.5 bg-dark-950 rounded-xl border border-white/5 space-y-1">
+                      <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Anchor Tag & Hierarchy</div>
                       <div class="text-xs font-mono text-purple-300">&lt;{activeSignature.tagName}&gt; (parent: &lt;{activeSignature.parentTagName || 'body'}&gt;)</div>
                       <div class="text-[10px] text-slate-400 font-mono truncate">{activeSignature.content}</div>
                     </div>
-                    <div class="p-3 bg-slate-950 rounded-xl border border-white/5 space-y-1">
-                      <div class="text-[10px] text-slate-500 uppercase font-bold">Text & Class Anchors</div>
+                    <div class="p-3.5 bg-dark-950 rounded-xl border border-white/5 space-y-1">
+                      <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Text & Class Anchors</div>
                       <div class="text-xs text-slate-200 truncate italic">"{activeSignature.textSnippet || 'N/A'}"</div>
                       <div class="text-[10px] text-teal-400 font-mono truncate">{activeSignature.classes?.join(', ') || 'No classes'}</div>
                     </div>
                   </div>
                 ) : (
-                  <div class="p-4 bg-slate-950/60 rounded-xl border border-dashed border-white/10 text-center text-xs text-slate-500">
+                  <div class="p-5 bg-dark-950/60 rounded-xl border border-dashed border-white/10 text-center text-xs text-slate-400">
                     Click any element in the "Visual Target Preview" tab to capture its live DOM structural fingerprint.
                   </div>
                 )}
@@ -1830,10 +2068,14 @@ function App() {
 
               {/* Adaptive Self-Healing Result Card */}
               {adaptiveResult && (
-                <div class="p-5 bg-slate-900 border border-purple-500/30 rounded-2xl space-y-3 animate-fade-in">
+                <div class="glass-card p-6 border border-purple-500/40 rounded-2xl space-y-3 animate-fade-in shadow-xl">
                   <div class="flex justify-between items-center">
-                    <span class="text-xs font-bold text-slate-200">Self-Healing Engine Evaluation</span>
-                    <span class={`px-2 py-0.5 rounded text-xs font-bold ${adaptiveResult.found ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/20 text-red-300'}`}>
+                    <span class="text-xs font-bold text-slate-200 font-display">Self-Healing Engine Evaluation</span>
+                    <span class={`px-2.5 py-0.5 rounded-full text-xs font-bold font-mono border ${
+                      adaptiveResult.found 
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' 
+                        : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                    }`}>
                       {adaptiveResult.found ? `RECOVERED (${(adaptiveResult.confidence * 100).toFixed(1)}% Match)` : 'NO CONFIDENT MATCH'}
                     </span>
                   </div>
@@ -1841,10 +2083,10 @@ function App() {
                   {adaptiveResult.found && (
                     <div class="space-y-2">
                       <div class="text-xs text-slate-400 font-mono">
-                        Healed Selector: <strong class="text-purple-300">{adaptiveResult.healedSelector}</strong>
+                        Healed Selector: <strong class="text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/30">{adaptiveResult.healedSelector}</strong>
                       </div>
                       {adaptiveResult.match && (
-                        <div class="p-3 bg-slate-950 rounded-xl border border-white/5 text-xs font-mono text-emerald-400">
+                        <div class="p-3.5 bg-dark-950 rounded-xl border border-white/5 text-xs font-mono text-emerald-400">
                           {adaptiveResult.match.text}
                         </div>
                       )}
@@ -1854,14 +2096,14 @@ function App() {
               )}
 
               {/* Saved Domain Fingerprints Table */}
-              <div class="p-5 bg-slate-900 border border-white/10 rounded-2xl space-y-3">
-                <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Persisted Domain Fingerprints ({fingerprints.length})</h4>
+              <div class="glass-card p-6 rounded-2xl space-y-4 border border-white/[0.08] shadow-xl">
+                <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider font-display">Persisted Domain Fingerprints ({fingerprints.length})</h4>
                 {fingerprints.length === 0 ? (
                   <div class="text-xs text-slate-500 italic">No persistent fingerprints in SQLite element_fingerprints table.</div>
                 ) : (
                   <div class="space-y-2">
                     {fingerprints.map(fp => (
-                      <div key={fp.id} class="p-3 bg-slate-950 rounded-xl border border-white/5 flex justify-between items-center text-xs">
+                      <div key={fp.id} class="p-3.5 bg-dark-950 rounded-xl border border-white/5 flex justify-between items-center text-xs">
                         <div>
                           <span class="font-bold text-slate-200">{fp.domain}</span>
                           <span class="text-slate-400 ml-2 font-mono text-[10px]">[{fp.name}]</span>
@@ -1872,7 +2114,7 @@ function App() {
                             await safeFetchJson(`/api/fingerprints/${fp.id}`, { method: 'DELETE' });
                             loadData();
                           }}
-                          class="px-2 py-1 bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white rounded text-[10px]"
+                          class="btn-lux px-3 py-1 bg-dark-900 hover:bg-rose-600 text-slate-400 hover:text-white rounded-lg text-[10px]"
                         >
                           Delete
                         </button>
@@ -1887,11 +2129,11 @@ function App() {
           {/* Tab 5: Unsupervised Entities & Bandit RL Studio */}
           <div class={`flex-1 h-full overflow-auto custom-scrollbar p-6 space-y-6 ${activeTab === 'entities' ? 'block' : 'hidden'}`}>
             {/* Action Bar */}
-            <div class="bg-slate-900 border border-white/5 rounded-2xl p-5 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="glass-card rounded-2xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 border border-white/[0.08]">
               <div class="space-y-1">
-                <div class="flex items-center space-x-2">
-                  <span class="text-xl">📦</span>
-                  <h3 class="text-sm font-bold text-slate-100">Unsupervised Entity Induction & Online Bandit RL</h3>
+                <div class="flex items-center space-x-2.5">
+                  <span class="text-2xl">📦</span>
+                  <h3 class="text-sm font-display font-bold text-slate-100">Unsupervised Entity Induction & Online Bandit RL</h3>
                 </div>
                 <p class="text-[11px] text-slate-400">Zero-selector structural pattern discovery for products, listings, and cards, paired with Bayesian defense learning.</p>
               </div>
@@ -1899,8 +2141,8 @@ function App() {
               <div class="flex items-center space-x-3">
                 <button
                   onClick={handleMineEntities}
-                  disabled={miningEntities || !targetUrl}
-                  class="px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-lg shadow-amber-900/20 transition-all flex items-center space-x-2"
+                  disabled={miningEntities || !url}
+                  class="btn-lux btn-amber-gradient px-5 py-2.5 disabled:opacity-50 text-white rounded-xl text-xs font-bold space-x-2"
                 >
                   {miningEntities ? (
                     <>
@@ -1922,57 +2164,57 @@ function App() {
               <div class="space-y-4">
                 {/* Stats Header Bar */}
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div class="bg-slate-900 border border-white/5 rounded-xl p-3">
-                    <div class="text-[10px] text-slate-400 font-semibold uppercase">Items Discovered</div>
-                    <div class="text-lg font-bold text-amber-400">{entitiesData.entities?.length || 0}</div>
+                  <div class="glass-card p-3.5 rounded-xl border border-white/5">
+                    <div class="text-[10px] text-slate-400 font-semibold uppercase font-display">Items Discovered</div>
+                    <div class="text-xl font-bold text-amber-400 mt-0.5">{entitiesData.entities?.length || 0}</div>
                   </div>
-                  <div class="bg-slate-900 border border-white/5 rounded-xl p-3">
-                    <div class="text-[10px] text-slate-400 font-semibold uppercase">Archetype</div>
-                    <div class="text-lg font-bold text-teal-400 uppercase">{entitiesData.detectedType || 'GENERIC'}</div>
+                  <div class="glass-card p-3.5 rounded-xl border border-white/5">
+                    <div class="text-[10px] text-slate-400 font-semibold uppercase font-display">Archetype</div>
+                    <div class="text-xl font-bold text-teal-400 uppercase mt-0.5">{entitiesData.detectedType || 'GENERIC'}</div>
                   </div>
-                  <div class="bg-slate-900 border border-white/5 rounded-xl p-3">
-                    <div class="text-[10px] text-slate-400 font-semibold uppercase">Model Confidence</div>
-                    <div class="text-lg font-bold text-emerald-400">{Math.round((entitiesData.confidence || 0) * 100)}%</div>
+                  <div class="glass-card p-3.5 rounded-xl border border-white/5">
+                    <div class="text-[10px] text-slate-400 font-semibold uppercase font-display">Model Confidence</div>
+                    <div class="text-xl font-bold text-emerald-400 mt-0.5">{Math.round((entitiesData.confidence || 0) * 100)}%</div>
                   </div>
-                  <div class="bg-slate-900 border border-white/5 rounded-xl p-3">
-                    <div class="text-[10px] text-slate-400 font-semibold uppercase">Clusters Analyzed</div>
-                    <div class="text-lg font-bold text-purple-400">{entitiesData.clusterCount || 0}</div>
+                  <div class="glass-card p-3.5 rounded-xl border border-white/5">
+                    <div class="text-[10px] text-slate-400 font-semibold uppercase font-display">Clusters Analyzed</div>
+                    <div class="text-xl font-bold text-purple-400 mt-0.5">{entitiesData.clusterCount || 0}</div>
                   </div>
                 </div>
 
                 {/* Cards Grid */}
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
                   {entitiesData.entities?.map((item, idx) => (
-                    <div key={idx} class="bg-slate-900/90 border border-white/5 rounded-xl p-4 flex flex-col justify-between space-y-3 hover:border-amber-500/30 transition-all shadow-md">
+                    <div key={idx} class="glass-card p-4 rounded-2xl flex flex-col justify-between space-y-3 hover:border-amber-500/40 transition-all shadow-md">
                       <div class="space-y-2">
                         {item.image && (
-                          <div class="w-full h-32 bg-slate-950 rounded-lg overflow-hidden flex items-center justify-center">
+                          <div class="w-full h-36 bg-dark-950 rounded-xl overflow-hidden flex items-center justify-center">
                             <img src={item.image} alt={item.title || ''} class="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
                           </div>
                         )}
                         <div class="flex items-start justify-between gap-2">
                           <h4 class="text-xs font-bold text-slate-100 line-clamp-2">{item.title || '(Untitled Item)'}</h4>
                           {item.badge && (
-                            <span class="px-2 py-0.5 text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded uppercase shrink-0">
+                            <span class="px-2 py-0.5 text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded uppercase shrink-0 font-mono">
                               {item.badge}
                             </span>
                           )}
                         </div>
                         {item.description && (
-                          <p class="text-[11px] text-slate-400 line-clamp-3">{item.description}</p>
+                          <p class="text-[11px] text-slate-400 line-clamp-3 leading-relaxed">{item.description}</p>
                         )}
                       </div>
 
-                      <div class="pt-2 border-t border-white/5 flex items-center justify-between text-[11px]">
+                      <div class="pt-2.5 border-t border-white/5 flex items-center justify-between text-[11px]">
                         {item.price ? (
-                          <span class="font-bold text-emerald-400">{item.price}</span>
+                          <span class="font-bold text-emerald-400 font-mono">{item.price}</span>
                         ) : item.date ? (
                           <span class="text-slate-400 font-mono text-[10px]">{item.date}</span>
                         ) : (
-                          <span class="text-slate-500">#{idx + 1}</span>
+                          <span class="text-slate-500 font-mono text-[10px]">#{idx + 1}</span>
                         )}
                         {item.url && (
-                          <a href={item.url} target="_blank" rel="noreferrer" class="text-blue-400 hover:text-blue-300 font-semibold text-[10px] flex items-center space-x-1">
+                          <a href={item.url} target="_blank" rel="noreferrer" class="btn-lux text-brand-300 hover:text-white px-2.5 py-1 rounded-lg bg-brand-500/10 hover:bg-brand-500/20 font-semibold text-[10px] space-x-1 border border-brand-500/20">
                             <span>Visit</span>
                             <span>↗</span>
                           </a>
@@ -1983,19 +2225,21 @@ function App() {
                 </div>
               </div>
             ) : (
-              <div class="bg-slate-900/40 border border-dashed border-white/10 rounded-2xl p-8 text-center space-y-3">
-                <span class="text-3xl">📦</span>
-                <p class="text-xs text-slate-400 max-w-md mx-auto">No repeating entities mined yet. Enter any product catalog, news feed, or search page URL and click <strong class="text-amber-400">Mine Repeating Entities</strong>.</p>
+              <div class="glass-card border border-dashed border-white/10 rounded-2xl p-10 text-center space-y-3">
+                <span class="text-4xl">📦</span>
+                <p class="text-xs text-slate-400 max-w-md mx-auto">
+                  No repeating entities mined yet. Enter any product catalog, news feed, or search page URL in the sidebar and click <strong class="text-amber-400">Mine Repeating Entities</strong>.
+                </p>
               </div>
             )}
 
             {/* Bayesian Bandit Domain Defenses Section */}
-            <div class="bg-slate-900 border border-white/5 rounded-2xl p-5 space-y-4 shadow-lg">
+            <div class="glass-card rounded-2xl p-6 space-y-4 shadow-xl border border-white/[0.08]">
               <div class="flex items-center justify-between">
-                <div class="flex items-center space-x-2">
-                  <span class="text-lg">🎰</span>
+                <div class="flex items-center space-x-2.5">
+                  <span class="text-2xl">🎰</span>
                   <div>
-                    <h3 class="text-xs font-bold text-slate-100">Bayesian Bandit Defense Priors (Thompson Sampling)</h3>
+                    <h3 class="text-xs font-display font-bold text-slate-100">Bayesian Bandit Defense Priors (Thompson Sampling)</h3>
                     <p class="text-[10px] text-slate-400">Dynamically tracks bot defense success probabilities and bypasses probes for protected targets.</p>
                   </div>
                 </div>
@@ -2004,7 +2248,7 @@ function App() {
                     const b = await safeFetchJson('/api/bandit');
                     setBanditStats(b || []);
                   }}
-                  class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-semibold"
+                  class="btn-lux px-3 py-1.5 bg-dark-900 hover:bg-dark-800 text-slate-300 rounded-xl text-[10px] font-semibold border border-white/10"
                 >
                   ↻ Refresh
                 </button>
@@ -2013,33 +2257,33 @@ function App() {
               {banditStats.length === 0 ? (
                 <p class="text-xs text-slate-500 italic py-2">No domain trials recorded in this session yet.</p>
               ) : (
-                <div class="overflow-x-auto">
+                <div class="overflow-x-auto custom-scrollbar">
                   <table class="w-full text-left text-xs font-mono">
                     <thead>
-                      <tr class="border-b border-white/5 text-[10px] text-slate-400 uppercase">
-                        <th class="py-2 px-3">Domain</th>
-                        <th class="py-2 px-3">Trials</th>
-                        <th class="py-2 px-3">Static E[X]</th>
-                        <th class="py-2 px-3">Dynamic E[X]</th>
-                        <th class="py-2 px-3">Stealth E[X]</th>
-                        <th class="py-2 px-3">Route Optimization</th>
+                      <tr class="border-b border-white/5 text-[10px] text-slate-400 uppercase tracking-wider font-display">
+                        <th class="py-2.5 px-3">Domain</th>
+                        <th class="py-2.5 px-3">Trials</th>
+                        <th class="py-2.5 px-3">Static E[X]</th>
+                        <th class="py-2.5 px-3">Dynamic E[X]</th>
+                        <th class="py-2.5 px-3">Stealth E[X]</th>
+                        <th class="py-2.5 px-3">Route Optimization</th>
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-white/5 text-[11px]">
                       {banditStats.map((st, i) => (
                         <tr key={i} class="hover:bg-white/[0.02]">
-                          <td class="py-2 px-3 font-bold text-slate-200">{st.domain}</td>
-                          <td class="py-2 px-3 text-slate-400">{st.totalTrials}</td>
-                          <td class="py-2 px-3 text-slate-300">{(st.arms.static.expectedValue * 100).toFixed(0)}% <span class="text-[9px] text-slate-500">({st.arms.static.alpha}/{st.arms.static.beta})</span></td>
-                          <td class="py-2 px-3 text-slate-300">{(st.arms.dynamic.expectedValue * 100).toFixed(0)}% <span class="text-[9px] text-slate-500">({st.arms.dynamic.alpha}/{st.arms.dynamic.beta})</span></td>
-                          <td class="py-2 px-3 text-slate-300">{(st.arms.stealth.expectedValue * 100).toFixed(0)}% <span class="text-[9px] text-slate-500">({st.arms.stealth.alpha}/{st.arms.stealth.beta})</span></td>
-                          <td class="py-2 px-3">
+                          <td class="py-2.5 px-3 font-bold text-slate-200">{st.domain}</td>
+                          <td class="py-2.5 px-3 text-slate-400">{st.totalTrials}</td>
+                          <td class="py-2.5 px-3 text-slate-300">{(st.arms.static.expectedValue * 100).toFixed(0)}% <span class="text-[9px] text-slate-500">({st.arms.static.alpha}/{st.arms.static.beta})</span></td>
+                          <td class="py-2.5 px-3 text-slate-300">{(st.arms.dynamic.expectedValue * 100).toFixed(0)}% <span class="text-[9px] text-slate-500">({st.arms.dynamic.alpha}/{st.arms.dynamic.beta})</span></td>
+                          <td class="py-2.5 px-3 text-slate-300">{(st.arms.stealth.expectedValue * 100).toFixed(0)}% <span class="text-[9px] text-slate-500">({st.arms.stealth.alpha}/{st.arms.stealth.beta})</span></td>
+                          <td class="py-2.5 px-3">
                             {st.bypass.bypass ? (
-                              <span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded text-[9px] font-bold">
+                              <span class="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-md text-[9px] font-bold">
                                 ⚡ DIRECT {st.bypass.tier.toUpperCase()} ({Math.round(st.bypass.confidence * 100)}%)
                               </span>
                             ) : (
-                              <span class="px-2 py-0.5 bg-slate-800 text-slate-400 rounded text-[9px]">
+                              <span class="px-2.5 py-0.5 bg-dark-900 text-slate-400 border border-white/5 rounded-md text-[9px]">
                                 STANDARD PROBE
                               </span>
                             )}
@@ -2055,40 +2299,98 @@ function App() {
         </section>
       </main>
 
-      {/* Model Context Protocol (MCP) Modal */}
-      {showMcpModal && (
-        <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-6 animate-fade-in">
-          <div class="bg-slate-900 border border-white/10 rounded-2xl max-w-xl w-full p-6 space-y-5 shadow-2xl">
+      {/* Keyboard Shortcuts & Architecture Guide Modal */}
+      {showHelpModal && (
+        <div class="fixed inset-0 bg-dark-950/80 backdrop-blur-md flex items-center justify-center z-50 p-6 animate-fade-in">
+          <div class="glass-card max-w-xl w-full p-6 space-y-5 shadow-2xl border border-white/10 rounded-3xl">
             <div class="flex justify-between items-center">
-              <div class="flex items-center space-x-2">
-                <span class="text-2xl">🤖</span>
+              <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-2xl bg-brand-500/20 border border-brand-500/40 flex items-center justify-center text-2xl">
+                  ⌨️
+                </div>
                 <div>
-                  <h3 class="text-sm font-bold text-slate-100">Model Context Protocol (MCP) Integration</h3>
-                  <p class="text-[11px] text-slate-400">Connect Cursor, Claude Desktop, and Antigravity AI agents to Scrapi</p>
+                  <h3 class="text-sm font-display font-bold text-slate-100">Scrapi Shortcuts & Quick Reference</h3>
+                  <p class="text-[11px] text-slate-400">Navigation, visual selector capture, and console execution</p>
                 </div>
               </div>
-              <button onClick={() => setShowMcpModal(false)} class="text-slate-500 hover:text-white text-lg">✕</button>
+              <button onClick={() => setShowHelpModal(false)} class="btn-lux text-slate-400 hover:text-white text-base px-2 py-1 rounded-lg bg-white/5">✕</button>
             </div>
 
             <div class="space-y-3 text-xs">
-              <div class="p-3 bg-slate-950 rounded-xl border border-white/5 space-y-1">
-                <div class="text-[10px] text-slate-400 font-semibold uppercase">Stdio Launch Command</div>
-                <div class="font-mono text-emerald-400 text-[11px]">node src/cli.js mcp</div>
-              </div>
-
-              <div class="space-y-1">
-                <div class="text-[10px] text-slate-400 font-semibold uppercase">Exposed AI Tools</div>
-                <div class="grid grid-cols-2 gap-2 text-[10px] font-mono">
-                  <div class="p-2 bg-slate-950 rounded border border-white/5 text-teal-300">scrapi_fetch</div>
-                  <div class="p-2 bg-slate-950 rounded border border-white/5 text-teal-300">scrapi_extract</div>
-                  <div class="p-2 bg-slate-950 rounded border border-white/5 text-purple-300">scrapi_adaptive_query</div>
-                  <div class="p-2 bg-slate-950 rounded border border-white/5 text-blue-300">scrapi_crawl</div>
+              <div class="grid grid-cols-2 gap-2 text-slate-300">
+                <div class="p-3 bg-dark-950 rounded-xl border border-white/5 space-y-1">
+                  <div class="font-mono text-brand-300 font-bold">Click Element</div>
+                  <div class="text-[11px] text-slate-400">Capture 64-bit SimHash DOM fingerprint in Target Preview</div>
+                </div>
+                <div class="p-3 bg-dark-950 rounded-xl border border-white/5 space-y-1">
+                  <div class="font-mono text-brand-300 font-bold">Alt / Cmd + Click</div>
+                  <div class="text-[11px] text-slate-400">Navigate to clicked link inside proxy preview</div>
+                </div>
+                <div class="p-3 bg-dark-950 rounded-xl border border-white/5 space-y-1">
+                  <div class="font-mono text-teal-300 font-bold">Enter Key</div>
+                  <div class="text-[11px] text-slate-400">Execute query in Live Query & REPL tester</div>
+                </div>
+                <div class="p-3 bg-dark-950 rounded-xl border border-white/5 space-y-1">
+                  <div class="font-mono text-purple-300 font-bold">Thompson Bandit</div>
+                  <div class="text-[11px] text-slate-400">Online Bayesian learning auto-bypasses static probes</div>
                 </div>
               </div>
 
-              <div class="space-y-1">
-                <div class="text-[10px] text-slate-400 font-semibold uppercase">Claude Desktop Config snippet</div>
-                <pre class="p-3 bg-slate-950 rounded-xl border border-white/5 font-mono text-[10px] text-slate-300 overflow-x-auto">
+              <div class="p-3 bg-dark-950 rounded-xl border border-white/5 space-y-1.5 font-mono text-[11px]">
+                <div class="text-[10px] text-slate-400 font-sans font-semibold uppercase tracking-wider">CLI Equivalent Commands</div>
+                <div class="text-slate-300"><span class="text-brand-400">node src/cli.js</span> scrape &lt;url&gt; --fetcher auto</div>
+                <div class="text-slate-300"><span class="text-emerald-400">node src/cli.js</span> topic &lt;url&gt; "Category"</div>
+                <div class="text-slate-300"><span class="text-purple-400">node src/cli.js</span> spider &lt;url&gt; -d 3 -m 50</div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowHelpModal(false)}
+              class="btn-lux btn-primary-gradient w-full py-2.5 text-xs font-bold rounded-xl"
+            >
+              Got It
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Model Context Protocol (MCP) Modal */}
+      {showMcpModal && (
+        <div class="fixed inset-0 bg-dark-950/80 backdrop-blur-md flex items-center justify-center z-50 p-6 animate-fade-in">
+          <div class="glass-card max-w-xl w-full p-6 space-y-5 shadow-2xl border border-white/10 rounded-3xl">
+            <div class="flex justify-between items-center">
+              <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-2xl">
+                  🤖
+                </div>
+                <div>
+                  <h3 class="text-sm font-display font-bold text-slate-100">Model Context Protocol (MCP) Integration</h3>
+                  <p class="text-[11px] text-slate-400">Connect Cursor, Claude Desktop, and Antigravity AI agents to Scrapi</p>
+                </div>
+              </div>
+              <button onClick={() => setShowMcpModal(false)} class="btn-lux text-slate-400 hover:text-white text-base px-2 py-1 rounded-lg bg-white/5">✕</button>
+            </div>
+
+            <div class="space-y-3.5 text-xs">
+              <div class="p-3.5 bg-dark-950 rounded-2xl border border-white/5 space-y-1">
+                <div class="text-[10px] text-slate-400 font-semibold uppercase font-display">Stdio Launch Command</div>
+                <div class="font-mono text-emerald-400 text-[11px]">node src/cli.js mcp</div>
+              </div>
+
+              <div class="space-y-1.5">
+                <div class="text-[10px] text-slate-400 font-semibold uppercase font-display">Exposed AI Tools</div>
+                <div class="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                  <div class="p-2.5 bg-dark-950 rounded-xl border border-white/5 text-teal-300">scrapi_fetch</div>
+                  <div class="p-2.5 bg-dark-950 rounded-xl border border-white/5 text-teal-300">scrapi_extract</div>
+                  <div class="p-2.5 bg-dark-950 rounded-xl border border-white/5 text-purple-300">scrapi_adaptive_query</div>
+                  <div class="p-2.5 bg-dark-950 rounded-xl border border-white/5 text-brand-300">scrapi_crawl</div>
+                  <div class="p-2.5 bg-dark-950 rounded-xl border border-white/5 text-amber-300 col-span-2">scrapi_entities (zero-selector catalog/cards)</div>
+                </div>
+              </div>
+
+              <div class="space-y-1.5">
+                <div class="text-[10px] text-slate-400 font-semibold uppercase font-display">Claude Desktop Config snippet</div>
+                <pre class="p-3.5 bg-dark-950 rounded-2xl border border-white/5 font-mono text-[10px] text-slate-300 overflow-x-auto custom-scrollbar">
 {JSON.stringify(mcpInfo?.configSnippets?.claudeDesktop || {}, null, 2)}
                 </pre>
               </div>
@@ -2099,7 +2401,7 @@ function App() {
                 navigator.clipboard.writeText(JSON.stringify(mcpInfo?.configSnippets?.claudeDesktop || {}, null, 2));
                 showToast('MCP config copied to clipboard!', 'success');
               }}
-              class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all"
+              class="btn-lux btn-purple-gradient w-full py-2.5 text-xs font-bold rounded-xl"
             >
               Copy Claude Config JSON
             </button>
@@ -2109,14 +2411,16 @@ function App() {
 
       {/* Floating Status Toast Notification */}
       {statusMsg.text && (
-        <div class="fixed bottom-6 right-6 z-50 animate-bounce">
-          <div class={`px-4 py-2.5 rounded-xl shadow-2xl flex items-center space-x-2 text-xs font-bold border ${
-            statusMsg.type === 'success' ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/40' :
-            statusMsg.type === 'error' ? 'bg-red-950/90 text-red-300 border-red-500/40' :
-            'bg-blue-950/90 text-blue-300 border-blue-500/40'
+        <div class="fixed bottom-6 right-6 z-50 animate-slide-up">
+          <div class={`glass-card px-4 py-3 rounded-2xl shadow-2xl flex items-center space-x-3 text-xs font-bold border backdrop-blur-xl ${
+            statusMsg.type === 'success' ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/50 shadow-emerald-900/30' :
+            statusMsg.type === 'error' ? 'bg-rose-950/90 text-rose-300 border-rose-500/50 shadow-rose-900/30' :
+            'bg-brand-950/90 text-brand-300 border-brand-500/50 shadow-brand-900/30'
           }`}>
-            <span>{statusMsg.type === 'success' ? '✔' : statusMsg.type === 'error' ? '✖' : 'ℹ'}</span>
-            <span>{statusMsg.text}</span>
+            <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 bg-white/10 font-mono">
+              {statusMsg.type === 'success' ? '✔' : statusMsg.type === 'error' ? '✖' : 'ℹ'}
+            </span>
+            <span class="font-sans leading-tight">{statusMsg.text}</span>
           </div>
         </div>
       )}
