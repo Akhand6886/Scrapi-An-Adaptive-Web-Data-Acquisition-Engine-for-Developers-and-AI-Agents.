@@ -263,7 +263,8 @@ app.get('/api/proxy', async (req, res) => {
 app.get('/api/scrapes', (req, res) => {
   try {
     const category = req.query.category || null;
-    const scrapes = getAllScrapes(category);
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : null;
+    const scrapes = getAllScrapes(category, limit);
     res.json(scrapes);
   } catch (err) {
     res.status(500).json({ error: err.message });

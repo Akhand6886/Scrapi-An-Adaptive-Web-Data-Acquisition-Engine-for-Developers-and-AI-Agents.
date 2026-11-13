@@ -21,7 +21,7 @@ import {
   globalBandit 
 } from './src/trees/bandit.js';
 import { AdaptiveEngine, Response } from './src/parser/index.js';
-import { initStorage, getDomainBanditPrior, saveDomainBanditPrior } from './src/storage.js';
+import { initStorage, getDomainBanditPrior, saveDomainBanditPrior, getAllScrapes } from './src/storage.js';
 
 console.log('🧪 Starting Scrapi State-of-the-Art Methods Verification Suite...\n');
 
@@ -297,5 +297,18 @@ assert.ok(entitiesTool.description.includes('repeating entity'));
 
 console.log(`  ✓ 5 MCP tools registered: ${registeredToolNames.join(', ')}`);
 console.log(`  ✓ scrapi_entities schema and standalone polyfill verified.`);
+
+// ═════════════════════════════════════════════
+// 5. Storage Pagination & History Limit
+// ═════════════════════════════════════════════
+console.log('\n5. Testing Storage History Pagination & Limit...');
+
+const paginatedScrapes = getAllScrapes(null, 3);
+assert.ok(Array.isArray(paginatedScrapes));
+assert.ok(paginatedScrapes.length <= 3, 'Limit parameter must restrict row count');
+
+const allScrapes = getAllScrapes();
+assert.ok(allScrapes.length >= paginatedScrapes.length);
+console.log(`  ✓ Pagination limit enforced: retrieved ${paginatedScrapes.length} items (limit: 3) vs total ${allScrapes.length} items.`);
 
 console.log('\n✅ All State-of-the-Art Methods Verified Successfully!');

@@ -327,21 +327,27 @@ export function markScrapeLlmProcessed(scrapeId, schemaUsed) {
 
 /**
  * Retrieves list of all scrapes.
+ * @param {string|null} categoryFilter - Optional category name to filter by
+ * @param {number|null} limit - Optional max number of rows to return
  * @returns {Array}
  */
-export function getAllScrapes(categoryFilter = null) {
+export function getAllScrapes(categoryFilter = null, limit = null) {
   if (!db) return [];
   try {
+    let sql = 'SELECT * FROM scrapes';
+    const params = [];
     if (categoryFilter) {
-      const stmt = db.prepare(`
-        SELECT * FROM scrapes WHERE category = ? ORDER BY scraped_at DESC
-      `);
-      return stmt.all(categoryFilter);
+      sql += ' WHERE category = ?';
+      params.push(categoryFilter);
     }
-    const stmt = db.prepare(`
-      SELECT * FROM scrapes ORDER BY scraped_at DESC
-    `);
-    return stmt.all();
+    sql += ' ORDER BY scraped_at DESC';
+    const parsedLimit = limit !== null && limit !== undefined ? parseInt(limit, 10) : null;
+    if (parsedLimit && Number.isInteger(parsedLimit) && parsedLimit > 0) {
+      sql += ' LIMIT ?';
+      params.push(parsedLimit);
+    }
+    const stmt = db.prepare(sql);
+    return stmt.all(...params);
   } catch (err) {
     console.error('[Storage Error] getAllScrapes failed:', err.message);
     return [];

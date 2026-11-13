@@ -327,18 +327,20 @@ program
 // List command
 program
   .command('list')
-  .description('Show all past scrapes from the SQLite DB')
+  .description('Show past scrapes from the SQLite DB')
+  .option('-l, --limit <number>', 'Maximum rows to display (use 0 or "all" for unlimited)', '20')
   .option('--category <name>', 'Filter history by category name')
   .action(async (options) => {
     await initStorage();
     try {
-      const scrapes = getAllScrapes(options.category);
+      const limitVal = options.limit === 'all' || options.limit === '0' ? null : (parseInt(options.limit, 10) || 20);
+      const scrapes = getAllScrapes(options.category, limitVal);
       if (scrapes.length === 0) {
         console.log(chalk.yellow('No scrapes recorded in database.'));
         return;
       }
       
-      console.log(chalk.bold.cyan('\nPast Scrapes:'));
+      console.log(chalk.bold.cyan(`\nPast Scrapes${options.category ? ` [Category: ${options.category}]` : ''} (Showing ${scrapes.length} records):`));
       console.log(chalk.bold('ID  | Status  | Word Count | Scraped At           | Category   | URL'));
       console.log('-----------------------------------------------------------------------------------------');
       scrapes.forEach(s => {
@@ -384,28 +386,64 @@ program
 
 // Export command
 program
-  .command('export <id>')
-  .description('Re-export a scrape to a new Markdown file')
+  .command('export [id]')
+  .description('Export a past scrape to a file or export dataset to JSON/JSONL/CSV')
   .option('-s, --src-dir <dir>', 'Source directory containing Markdown files', './output')
-  .requiredOption('-d, --dest <file>', 'Destination filepath to write Markdown to')
+  .option('-d, --dest <file>', 'Destination filepath to write output to')
+  .option('-f, --format <format>', 'Export format for bulk export: markdown, json, jsonl, csv', 'markdown')
+  .option('-c, --category <name>', 'Filter bulk export by category name')
+  .option('--all', 'Export all scrapes from SQLite database', false)
   .action(async (id, options) => {
     await initStorage();
     try {
-      const scrape = getScrapeById(parseInt(id, 10));
-      if (!scrape) {
-        throw new Error(`Scrape record ID ${id} not found.`);
-      }
-      if (scrape.status !== 'success' || !scrape.filename) {
-        throw new Error(`Scrape ID ${id} is not exportable.`);
-      }
+      if (id && !options.all) {
+        const scrape = getScrapeById(parseInt(id, 10));
+        if (!scrape) {
+          throw new Error(`Scrape record ID ${id} not found.`);
+        }
+        if (scrape.status !== 'success' || !scrape.filename) {
+          throw new Error(`Scrape ID ${id} is not exportable.`);
+        }
 
-      const srcPath = path.join(options.srcDir, scrape.filename);
-      const content = await fs.readFile(srcPath, 'utf-8');
-      
-      await fs.mkdir(path.dirname(options.dest), { recursive: true });
-      await fs.writeFile(options.dest, content, 'utf-8');
-      
-      console.log(chalk.green(`Successfully exported Scrape ID ${id} to ${chalk.cyan(options.dest)}`));
+        const srcPath = path.join(options.srcDir, scrape.filename);
+        const content = await fs.readFile(srcPath, 'utf-8');
+        
+        if (options.dest) {
+          await fs.mkdir(path.dirname(options.dest), { recursive: true });
+          await fs.writeFile(options.dest, content, 'utf-8');
+          console.log(chalk.green(`Successfully exported Scrape ID ${id} to ${chalk.cyan(options.dest)}`));
+        } else {
+          console.log(content);
+        }
+      } else {
+        // Bulk dataset export
+        const format = (options.format || 'json').toLowerCase();
+        const scrapes = getAllScrapes(options.category);
+        let outputData = '';
+
+        if (format === 'jsonl') {
+          outputData = scrapes.map(s => JSON.stringify(s)).join('\n') + '\n';
+        } else if (format === 'csv') {
+          const headers = ['id', 'url', 'scraped_at', 'status', 'word_count', 'category', 'filename', 'error'];
+          const rows = scrapes.map(s => headers.map(h => {
+            const val = s[h] !== null && s[h] !== undefined ? String(s[h]) : '';
+            return `"${val.replace(/"/g, '""')}"`;
+          }).join(','));
+          outputData = [headers.join(','), ...rows].join('\n') + '\n';
+        } else if (format === 'json') {
+          outputData = JSON.stringify(scrapes, null, 2);
+        } else {
+          throw new Error(`Unsupported bulk export format: "${format}". Choose json, jsonl, or csv.`);
+        }
+
+        if (options.dest) {
+          await fs.mkdir(path.dirname(options.dest), { recursive: true });
+          await fs.writeFile(options.dest, outputData, 'utf-8');
+          console.log(chalk.green(`Successfully exported ${scrapes.length} scrapes in ${format.toUpperCase()} format to ${chalk.cyan(options.dest)}`));
+        } else {
+          console.log(outputData);
+        }
+      }
     } catch (err) {
       handleError(err);
     }

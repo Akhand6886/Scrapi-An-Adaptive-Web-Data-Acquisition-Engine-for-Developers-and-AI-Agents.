@@ -202,13 +202,28 @@ node src/cli.js show 42
 
 ---
 
-## 11. `export <id>`
-Re-exports a past scrape from SQLite to a new Markdown file.
+## 11. `export [id]`
+Exports a single past scrape by ID or exports entire datasets in bulk to Markdown, JSON, JSONL, or CSV.
 
 ### Syntax
 ```bash
-node src/cli.js export 42 [options]
+# Export single scrape by ID
+node src/cli.js export 42 -d ./exported.md
+
+# Bulk export database records to JSON, JSONL, or CSV
+node src/cli.js export --format json --dest ./scrapes.json
+node src/cli.js export --format jsonl --dest ./scrapes.jsonl
+node src/cli.js export --format csv --dest ./scrapes.csv --category news
 ```
+
+### Options
+| Option | Description | Default |
+|---|---|---|
+| `-d, --dest <file>` | Destination filepath to write output to | stdout |
+| `-f, --format <type>`| Export format for bulk: `markdown`, `json`, `jsonl`, `csv` | `'markdown'` |
+| `-c, --category <name>` | Filter bulk export by category name | `null` |
+| `-s, --src-dir <dir>` | Source directory containing Markdown files | `'./output'` |
+| `--all` | Force bulk export of all scrapes from SQLite | `false` |
 
 ---
 
