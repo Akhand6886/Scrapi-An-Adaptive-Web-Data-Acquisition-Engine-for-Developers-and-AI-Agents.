@@ -1,3 +1,4 @@
+import '../polyfill.js';
 import readline from 'readline';
 import { globalFetcherPool } from '../fetchers/index.js';
 import { CrawlEngine } from '../spiders/engine.js';
@@ -70,6 +71,19 @@ export class MCPServer {
             url: { type: 'string', description: 'Seed website URL' },
             maxPages: { type: 'number', default: 5, description: 'Maximum pages to crawl' },
             depth: { type: 'number', default: 2, description: 'Maximum depth level' }
+          },
+          required: ['url']
+        }
+      },
+      {
+        name: 'scrapi_entities',
+        description: 'Automatically extract repeating entity cards (products, prices, news, articles) from a webpage without manual selectors.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            url: { type: 'string', description: 'Target catalog, listing, or news feed URL' },
+            limit: { type: 'number', default: 50, description: 'Maximum number of items to return' },
+            fetcher: { type: 'string', enum: ['static', 'dynamic', 'stealth'], default: 'static' }
           },
           required: ['url']
         }
@@ -172,6 +186,27 @@ export class MCPServer {
             {
               type: 'text',
               text: JSON.stringify({ seedUrl: args.url, ...stats }, null, 2)
+            }
+          ]
+        };
+      }
+
+      case 'scrapi_entities': {
+        const response = await globalFetcherPool.fetch(args.url, {
+          fetcher: args.fetcher || 'static'
+        });
+        const result = response.extractEntities({ limit: args.limit || 50 });
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                url: args.url,
+                detectedType: result.detectedType,
+                totalItemsFound: result.totalItemsFound,
+                confidence: result.confidence,
+                entities: result.entities
+              }, null, 2)
             }
           ]
         };
