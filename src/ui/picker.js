@@ -5,14 +5,18 @@
   const style = document.createElement('style');
   style.innerHTML = `
     .scrapi-hovered {
-      outline: 2px dashed #2563eb !important;
-      background-color: rgba(37, 99, 235, 0.15) !important;
-      transition: outline 0.1s ease-in-out;
-      cursor: pointer !important;
+      outline: 2px dashed #3b82f6 !important;
+      outline-offset: 2px !important;
+      background-color: rgba(59, 130, 246, 0.12) !important;
+      box-shadow: 0 0 12px rgba(59, 130, 246, 0.25) !important;
+      transition: all 0.15s ease-in-out !important;
+      cursor: crosshair !important;
     }
     .scrapi-selected {
-      outline: 3px solid #16a34a !important;
-      background-color: rgba(22, 163, 74, 0.2) !important;
+      outline: 2px solid #10b981 !important;
+      outline-offset: 2px !important;
+      background-color: rgba(16, 185, 129, 0.18) !important;
+      box-shadow: 0 0 16px rgba(16, 185, 129, 0.35) !important;
     }
   `;
   document.head.appendChild(style);
@@ -22,21 +26,25 @@
   tooltip.id = 'scrapi-tooltip';
   Object.assign(tooltip.style, {
     position: 'fixed',
-    background: '#0f172a',
+    background: 'rgba(7, 12, 24, 0.92)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
     color: '#38bdf8',
-    border: '1px solid #3b82f6',
-    padding: '4px 8px',
-    borderRadius: '6px',
-    fontSize: '10px',
-    fontFamily: 'monospace',
+    border: '1px solid rgba(56, 189, 248, 0.4)',
+    padding: '4px 10px',
+    borderRadius: '8px',
+    fontSize: '11px',
+    fontWeight: '600',
+    fontFamily: '"JetBrains Mono", monospace',
     zIndex: '9999999',
     pointerEvents: 'none',
-    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)',
+    boxShadow: '0 8px 24px -2px rgba(0, 0, 0, 0.6), 0 0 12px rgba(56, 189, 248, 0.2)',
     display: 'none',
     whiteSpace: 'nowrap',
     textOverflow: 'ellipsis',
-    maxWidth: '300px',
-    overflow: 'hidden'
+    maxWidth: '340px',
+    overflow: 'hidden',
+    letterSpacing: '0.02em'
   });
   document.body.appendChild(tooltip);
 
