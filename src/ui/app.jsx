@@ -100,6 +100,7 @@ function App() {
   // MCP Info Modal State
   const [showMcpModal, setShowMcpModal] = useState(false);
   const [mcpInfo, setMcpInfo] = useState(null);
+  const [mcpClient, setMcpClient] = useState('claude'); // 'claude' | 'cursor' | 'antigravity'
 
   // Entities & Online Bandit State
   const [entitiesData, setEntitiesData] = useState(null);
@@ -2388,22 +2389,64 @@ function App() {
                 </div>
               </div>
 
-              <div class="space-y-1.5">
-                <div class="text-[10px] text-slate-400 font-semibold uppercase font-display">Claude Desktop Config snippet</div>
+              <div class="space-y-2">
+                <div class="flex justify-between items-center">
+                  <div class="text-[10px] text-slate-400 font-semibold uppercase font-display">Client Config Snippet</div>
+                  <div class="flex bg-dark-950 p-1 rounded-xl border border-white/10 space-x-1">
+                    <button
+                      onClick={() => setMcpClient('claude')}
+                      class={`btn-lux px-2.5 py-0.5 text-[10px] font-bold rounded-lg transition-all ${
+                        mcpClient === 'claude' ? 'btn-purple-gradient text-white shadow' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Claude Desktop
+                    </button>
+                    <button
+                      onClick={() => setMcpClient('cursor')}
+                      class={`btn-lux px-2.5 py-0.5 text-[10px] font-bold rounded-lg transition-all ${
+                        mcpClient === 'cursor' ? 'btn-purple-gradient text-white shadow' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Cursor
+                    </button>
+                    <button
+                      onClick={() => setMcpClient('antigravity')}
+                      class={`btn-lux px-2.5 py-0.5 text-[10px] font-bold rounded-lg transition-all ${
+                        mcpClient === 'antigravity' ? 'btn-purple-gradient text-white shadow' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Antigravity
+                    </button>
+                  </div>
+                </div>
                 <pre class="p-3.5 bg-dark-950 rounded-2xl border border-white/5 font-mono text-[10px] text-slate-300 overflow-x-auto custom-scrollbar">
-{JSON.stringify(mcpInfo?.configSnippets?.claudeDesktop || {}, null, 2)}
+{JSON.stringify(
+  (mcpClient === 'claude' 
+    ? mcpInfo?.configSnippets?.claudeDesktop 
+    : mcpClient === 'cursor' 
+      ? mcpInfo?.configSnippets?.cursor 
+      : mcpInfo?.configSnippets?.antigravity) || {}, 
+  null, 
+  2
+)}
                 </pre>
               </div>
             </div>
 
             <button
               onClick={() => {
-                navigator.clipboard.writeText(JSON.stringify(mcpInfo?.configSnippets?.claudeDesktop || {}, null, 2));
-                showToast('MCP config copied to clipboard!', 'success');
+                const configToCopy = mcpClient === 'claude' 
+                  ? mcpInfo?.configSnippets?.claudeDesktop 
+                  : mcpClient === 'cursor' 
+                    ? mcpInfo?.configSnippets?.cursor 
+                    : mcpInfo?.configSnippets?.antigravity;
+                navigator.clipboard.writeText(JSON.stringify(configToCopy || {}, null, 2));
+                showToast(`MCP ${mcpClient.toUpperCase()} config copied to clipboard!`, 'success');
               }}
-              class="btn-lux btn-purple-gradient w-full py-2.5 text-xs font-bold rounded-xl"
+              class="btn-lux btn-purple-gradient w-full py-2.5 text-xs font-bold rounded-xl space-x-1.5"
             >
-              Copy Claude Config JSON
+              <span>📋</span>
+              <span>Copy {mcpClient === 'claude' ? 'Claude' : mcpClient === 'cursor' ? 'Cursor' : 'Antigravity'} Config JSON</span>
             </button>
           </div>
         </div>

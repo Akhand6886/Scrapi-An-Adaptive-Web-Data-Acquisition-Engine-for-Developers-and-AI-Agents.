@@ -33,6 +33,7 @@ graph LR
         Adaptor["Response Adaptor (src/parser/adaptor.js)"]
         Adaptive["AdaptiveEngine (src/parser/adaptive.js)"]
         Crawler["CrawlEngine (src/spiders/engine.js)"]
+        Cluster["ClusterExtractor (src/parser/cluster_extractor.js)"]
     end
 
     Agent <--> Stdin & Stdout
@@ -42,6 +43,7 @@ graph LR
     ToolHandler --> Adaptor
     ToolHandler --> Adaptive
     ToolHandler --> Crawler
+    ToolHandler --> Cluster
     ToolHandler --> Stdout
 ```
 
@@ -183,6 +185,19 @@ In Cursor Settings ➔ **Features** ➔ **MCP Servers** ➔ **Add New MCP Server
 - **Name**: `scrapi`
 - **Type**: `command`
 - **Command**: `node /absolute/path/to/Scrapi/src/cli.js mcp`
+
+### 4.3 Google Antigravity Configuration
+In your Antigravity agent configuration or `mcpServers` settings:
+```json
+{
+  "mcpServers": {
+    "scrapi": {
+      "command": "node",
+      "args": ["/absolute/path/to/Scrapi/src/cli.js", "mcp"]
+    }
+  }
+}
+```
 
 ---
 

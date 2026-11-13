@@ -26,6 +26,7 @@ import { globalFetcherPool } from './fetchers/index.js';
 import { runBenchmarks } from './benchmark/index.js';
 import { extractEntities } from './parser/cluster_extractor.js';
 import { globalBandit } from './trees/bandit.js';
+import { MCPServer } from './mcp/server.js';
 
 const program = new Command();
 

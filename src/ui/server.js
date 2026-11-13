@@ -818,6 +818,14 @@ app.get('/api/mcp/info', (req, res) => {
             }
           }
         }
+      },
+      antigravity: {
+        mcpServers: {
+          scrapi: {
+            command: "node",
+            args: [path.resolve(process.cwd(), "src/cli.js"), "mcp"]
+          }
+        }
       }
     }
   });
