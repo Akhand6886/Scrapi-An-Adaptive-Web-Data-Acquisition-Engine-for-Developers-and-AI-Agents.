@@ -73,7 +73,6 @@ graph TD
 
 ### 7. Built-in Model Context Protocol (MCP) Server (`scrapi mcp`)
 - Exposes 5 AI tools (`scrapi_fetch`, `scrapi_extract`, `scrapi_adaptive_query`, `scrapi_crawl`, `scrapi_entities`) over JSON-RPC stdio for AI coding assistants like Claude, Cursor, and Antigravity.
-- Exposes 5 AI tools (`scrapi_fetch`, `scrapi_extract`, `scrapi_adaptive_query`, `scrapi_crawl`, `scrapi_entities`) over JSON-RPC stdio for AI coding assistants like Claude, Cursor, and Antigravity.
 
 ---
 
