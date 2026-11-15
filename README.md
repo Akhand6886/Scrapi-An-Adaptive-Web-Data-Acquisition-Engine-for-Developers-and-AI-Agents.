@@ -1,6 +1,6 @@
-# 🕷️ Scrapi (v2.0 - Scrapling Engine Architecture)
+# 🕷️ Scrapi (v2.0 - Adaptive Scraping & Crawling Engine)
 
-An ultra-fast, adaptive, developer-grade web scraping and crawling framework in Node.js, re-architected with inspiration from [D4Vinci/Scrapling](https://github.com/D4Vinci/Scrapling).
+An ultra-fast, adaptive, developer-grade web scraping and crawling framework in Node.js.
 
 ---
 
