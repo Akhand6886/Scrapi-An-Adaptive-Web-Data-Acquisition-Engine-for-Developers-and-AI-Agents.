@@ -78,7 +78,7 @@ This document provides a realistic, code-accurate evaluation of the technical bo
 | **Fetchers** | Dynamic Headless Rendering | ✅ **Fully Implemented** | Playwright Chromium with network idle triggers ([`src/fetchers/dynamic.js`](../src/fetchers/dynamic.js)) |
 | **Fetchers** | Anti-Detection Fingerprinting | ✅ **Fully Implemented** | Spoofed navigator, WebGL, canvas, and Turnstile auto-solving ([`src/fetchers/stealth.js`](../src/fetchers/stealth.js)) |
 | **Fetchers** | Interactive CAPTCHA Solver | ❌ **Not Implemented** | Requires third-party OCR / human solver API |
-| **Parser** | Scrapling Adaptor & Selectors | ✅ **Fully Implemented** | Cheerio DOM, CSS & XPath emulation, text filtering ([`src/parser/adaptor.js`](../src/parser/adaptor.js), [`src/parser/selector.js`](../src/parser/selector.js)) |
+| **Parser** | Fluent Adaptor & Selectors | ✅ **Fully Implemented** | Cheerio DOM, CSS & XPath emulation, text filtering ([`src/parser/adaptor.js`](../src/parser/adaptor.js), [`src/parser/selector.js`](../src/parser/selector.js)) |
 | **Parser** | 64-bit SimHash Self-Healing | ✅ **Fully Implemented** | Bitwise SimHash with Hamming distance threshold ([`src/parser/simhash.js`](../src/parser/simhash.js), [`src/parser/adaptive.js`](../src/parser/adaptive.js)) |
 | **Parser** | Rich Metadata & Date Normalization | ✅ **Fully Implemented** | JSON-LD, OpenGraph, `<time>`, regex slug fallback ([`src/parser/adaptor.js`](../src/parser/adaptor.js)) |
 | **Spiders** | Dual-Frontier Topic Crawling | ✅ **Fully Implemented** | Decoupled discovery & article queues with date coverage tracking ([`src/spiders/topic_crawler.js`](../src/spiders/topic_crawler.js), [`src/spiders/engine.js`](../src/spiders/engine.js)) |
