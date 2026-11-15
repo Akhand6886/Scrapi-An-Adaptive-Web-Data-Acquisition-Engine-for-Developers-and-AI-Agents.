@@ -1,6 +1,6 @@
-# 🏛️ Scrapi v2.0 Architecture Guide (Scrapling Engine)
+# 🏛️ Scrapi v2.0 Architecture Guide
 
-This document outlines the complete architectural overhaul of **Scrapi (v2.0)** based on [D4Vinci/Scrapling](https://github.com/D4Vinci/Scrapling).
+This document outlines the complete architectural overhaul of **Scrapi (v2.0)**.
 
 ---
 
