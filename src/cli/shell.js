@@ -11,7 +11,7 @@ import { MarkdownEngine } from '../parser/markdown.js';
  * @param {object} [options] 
  */
 export async function startShell(initialUrl, options = {}) {
-  console.log(chalk.bold.cyan('\n🚀 Welcome to Scrapi Interactive Shell (Scrapling-Engine v2.0)'));
+  console.log(chalk.bold.cyan('\n🚀 Welcome to Scrapi Interactive Shell (Adaptive Engine v2.0)'));
   console.log(chalk.gray('Available globals: scrapi, fetch, fetchDynamic, fetchStealth, response, $, AdaptiveEngine, MarkdownEngine\n'));
 
   let initialResponse = null;
