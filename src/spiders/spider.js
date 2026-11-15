@@ -1,5 +1,5 @@
 /**
- * Spider base class inspired by Scrapy and Scrapling spiders.
+ * Spider base class for frontier-managed crawling and extraction.
  */
 export class Spider {
   constructor(options = {}) {
