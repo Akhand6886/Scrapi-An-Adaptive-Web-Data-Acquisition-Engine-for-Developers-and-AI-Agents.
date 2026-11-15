@@ -795,7 +795,7 @@ function App() {
                 SCRAPI
               </span>
               <span class="px-2 py-0.5 bg-brand-500/10 text-brand-400 text-[10px] rounded-full border border-brand-500/30 font-bold font-mono tracking-wide shadow-sm">
-                v2.0 SCRAPLING
+                v2.0 ADAPTIVE
               </span>
               <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping mr-1.5"></span>
@@ -2053,7 +2053,7 @@ function App() {
                       <span>🎯</span>
                       <span>Adaptive Self-Healing Studio</span>
                     </h3>
-                    <p class="text-xs text-slate-400 mt-0.5">Scrapling-inspired 64-bit SimHash structural fingerprinting protects scrapers against website redesigns</p>
+                    <p class="text-xs text-slate-400 mt-0.5">Adaptive 64-bit SimHash structural fingerprinting protects scrapers against website redesigns</p>
                   </div>
                   <button
                     onClick={() => handleTestAdaptive()}
