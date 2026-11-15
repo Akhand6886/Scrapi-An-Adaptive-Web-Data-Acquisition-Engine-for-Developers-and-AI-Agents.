@@ -6,7 +6,7 @@ A comprehensive architectural and performance comparison between **BeautifulSoup
 
 ## 📊 Quick Comparison Matrix
 
-| Feature / Dimension | BeautifulSoup (BS4) | Scrapi (v2.0 / Scrapling Architecture) |
+| Feature / Dimension | BeautifulSoup (BS4) | Scrapi (v2.0 / Adaptive Architecture) |
 | :--- | :--- | :--- |
 | **Primary Scope** | HTML/XML DOM parser library only | Full end-to-end web scraping & crawling framework |
 | **HTTP Fetching** | ❌ None (Requires `requests`, `httpx`, or `urllib`) | ✅ Built-in **`StaticFetcher`** (Keep-alive, TLS headers, ETag caching) |
