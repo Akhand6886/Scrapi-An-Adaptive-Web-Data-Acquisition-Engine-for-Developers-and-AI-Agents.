@@ -1,4 +1,4 @@
-# ⚠️ Scrapi v2.0: Limitations, Architectural Gaps & Known Issues
+ # ⚠️ Scrapi v2.0: Limitations, Architectural Gaps & Known Issues
 
 This document provides a realistic, code-accurate evaluation of the technical boundaries, architectural limitations, and known gaps in Scrapi v2.0. Understanding these boundaries helps developers choose the right strategies and avoid misapplying the framework.
 
